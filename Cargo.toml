@@ -1,0 +1,11 @@
+[package]
+name = "mmap"
+version = "0.0.1"
+authors = ["Dan Burkert <dan@danburkert.com>"]
+
+[dependencies]
+bitflags = "*"
+libc = "*"
+
+[dev-dependencies]
+tempdir = "*"
