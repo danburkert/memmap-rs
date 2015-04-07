@@ -110,6 +110,14 @@ impl Protection {
     }
 }
 
+#[cfg(any(target_os = "linux",
+          target_os = "android",
+          target_os = "macos",
+          target_os = "ios",
+          target_os = "freebsd",
+          target_os = "dragonfly",
+          target_os = "bitrig",
+          target_os = "openbsd"))]
 pub struct Mmap {
     ptr: *mut libc::c_void,
     len: usize,
@@ -169,6 +177,49 @@ impl Mmap {
             })
         }
     }
+
+    pub fn flush(&mut self) -> io::Result<()> {
+        let result = unsafe { libc::msync(self.ptr, self.len as libc::size_t, libc::MS_SYNC) };
+        if result == 0 {
+            Ok(())
+        } else {
+            Err(io::Error::last_os_error())
+        }
+    }
+
+    pub fn flush_async(&mut self) -> io::Result<()> {
+        let result = unsafe { libc::msync(self.ptr, self.len as libc::size_t, libc::MS_ASYNC) };
+        if result == 0 {
+            Ok(())
+        } else {
+            Err(io::Error::last_os_error())
+        }
+
+    }
+}
+
+#[cfg(any(target_os = "linux",
+          target_os = "android",
+          target_os = "macos",
+          target_os = "ios",
+          target_os = "freebsd",
+          target_os = "dragonfly",
+          target_os = "bitrig",
+          target_os = "openbsd"))]
+impl Drop for Mmap {
+    fn drop(&mut self) {
+        unsafe {
+            assert!(libc::munmap(self.ptr, self.len as libc::size_t) == 0,
+                    "unable to unmap mmap: {}", io::Error::last_os_error());
+        }
+    }
+}
+
+#[cfg(target_os = "windows")]
+pub struct Mmap {
+    file: Option<fs::File>,
+    ptr: *mut libc::c_void,
+    len: usize,
 }
 
 #[cfg(target_os = "windows")]
@@ -197,12 +248,12 @@ impl Mmap {
                 Err(io::Error::last_os_error())
             } else {
                 Ok(Mmap {
+                    file: Some(file),
                     ptr: ptr,
                     len: len as usize,
                 })
             }
         }
-
     }
 
     pub fn anonymous(len: usize, prot: Protection) -> io::Result<Mmap> {
@@ -223,28 +274,30 @@ impl Mmap {
                 Err(io::Error::last_os_error())
             } else {
                 Ok(Mmap {
+                    file: Option::None,
                     ptr: ptr,
                     len: len as usize,
                 })
             }
         }
     }
-}
 
-#[cfg(any(target_os = "linux",
-          target_os = "android",
-          target_os = "macos",
-          target_os = "ios",
-          target_os = "freebsd",
-          target_os = "dragonfly",
-          target_os = "bitrig",
-          target_os = "openbsd"))]
-impl Drop for Mmap {
-    fn drop(&mut self) {
-        unsafe {
-            assert!(libc::munmap(self.ptr, self.len as libc::size_t) == 0,
-                    "unable to unmap mmap: {}", io::Error::last_os_error());
+    pub fn flush(&mut self) -> io::Result<()> {
+        try!(self.flush_async());
+        if let Some(ref mut file) = self.file { file.sync_data() } else { Ok(()) }
+    }
+
+    pub fn flush_async(&mut self) -> io::Result<()> {
+        // TODO: reenable when rust-lang/rust/pull/24174 is merged
+        /*
+        let result = unsafe { libc::FlushViewOfFile(self.ptr, 0) };
+        if result != 0 {
+            Ok(())
+        } else {
+            Err(io::Error::last_os_error())
         }
+        */
+        Ok(())
     }
 }
 
@@ -379,23 +432,60 @@ mod test {
     extern crate tempdir;
 
     use std::{fs, env, iter};
-    use std::io::Write;
+    use std::io::{Read, Write};
 
     use super::*;
 
     #[test]
-    fn empty_file_page_boundary() {
-        let tempdir = tempdir::TempDir::new("open-mmap").unwrap();
-        let path = tempdir.path().join("open_mmap");
+    fn map_file() {
+        let expected_len = env::page_size() * 7 + 13;
+        let tempdir = tempdir::TempDir::new("mmap").unwrap();
+        let path = tempdir.path().join("mmap");
 
         fs::OpenOptions::new()
                         .write(true)
                         .create(true)
                         .open(&path).unwrap()
-                        .set_len(env::page_size() as u64).unwrap();
+                        .set_len(expected_len as u64).unwrap();
 
         let mut mmap = Mmap::open(path, Protection::ReadWrite).unwrap();
         let len = mmap.len();
+        assert_eq!(expected_len, len);
+
+        let zeros = iter::repeat(0).take(len).collect::<Vec<_>>();
+        let incr = (0..len).map(|n| n as u8).collect::<Vec<_>>();
+
+        // check that the mmap is empty
+        assert_eq!(&zeros[..], &*mmap);
+
+        // write values into the mmap
+        mmap.as_mut().write_all(&incr[..]).unwrap();
+
+        // read values back
+        assert_eq!(&incr[..], &*mmap);
+    }
+
+    // Check that a 0-length file will not be mapped
+    #[test]
+    fn map_empty_file() {
+        let tempdir = tempdir::TempDir::new("mmap").unwrap();
+        let path = tempdir.path().join("mmap");
+
+        fs::OpenOptions::new()
+                        .write(true)
+                        .create(true)
+                        .open(&path).unwrap();
+
+        assert!(Mmap::open(path, Protection::ReadWrite).is_err());
+    }
+
+
+    #[test]
+    fn map_anon() {
+        let expected_len = env::page_size() * 7 + 13;
+        let mut mmap = Mmap::anonymous(expected_len, Protection::ReadWrite).unwrap();
+        let len = mmap.len();
+        assert_eq!(expected_len, len);
 
         let zeros = iter::repeat(0).take(len).collect::<Vec<_>>();
         let incr = (0..len).map(|n| n as u8).collect::<Vec<_>>();
@@ -411,20 +501,25 @@ mod test {
     }
 
     #[test]
-    fn anon_page_boundary() {
-        let mut mmap = Mmap::anonymous(env::page_size(), Protection::ReadWrite).unwrap();
-        let len = mmap.len();
+    fn file_write() {
+        let tempdir = tempdir::TempDir::new("mmap").unwrap();
+        let path = tempdir.path().join("mmap");
 
-        let zeros = iter::repeat(0).take(len).collect::<Vec<_>>();
-        let incr = (0..len).map(|n| n as u8).collect::<Vec<_>>();
+        let mut file = fs::OpenOptions::new()
+                                       .read(true)
+                                       .write(true)
+                                       .create(true)
+                                       .open(&path).unwrap();
+        file.set_len(128).unwrap();
 
-        // check that the mmap is empty
-        assert_eq!(&zeros[..], &*mmap);
+        let write = b"abc123";
+        let mut read = [0u8; 6];
 
-        // write values into the mmap
-        mmap.as_mut().write_all(&incr[..]).unwrap();
+        let mut mmap = Mmap::open(&path, Protection::ReadWrite).unwrap();
+        (&mut mmap[..]).write(write).unwrap();
+        mmap.flush().unwrap();
 
-        // read values back
-        assert_eq!(&incr[..], &*mmap);
+        file.read(&mut read).unwrap();
+        assert_eq!(write, &read);
     }
 }
