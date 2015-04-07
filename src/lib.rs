@@ -1,4 +1,3 @@
-#![feature(unique)]
 #![cfg_attr(test, feature(page_size))]
 
 #[macro_use]
@@ -112,7 +111,7 @@ impl Protection {
 }
 
 pub struct Mmap {
-    ptr: ptr::Unique<u8>,
+    ptr: *mut libc::c_void,
     len: usize,
 }
 
@@ -144,7 +143,7 @@ impl Mmap {
             Err(io::Error::last_os_error())
         } else {
             Ok(Mmap {
-                ptr: unsafe { ptr::Unique::new(ptr as *mut u8) },
+                ptr: ptr,
                 len: len as usize,
             })
         }
@@ -165,7 +164,7 @@ impl Mmap {
             Err(io::Error::last_os_error())
         } else {
             Ok(Mmap {
-                ptr: unsafe { ptr::Unique::new(ptr as *mut u8) },
+                ptr: ptr,
                 len: len as usize,
             })
         }
@@ -198,7 +197,7 @@ impl Mmap {
                 Err(io::Error::last_os_error())
             } else {
                 Ok(Mmap {
-                    ptr: ptr::Unique::new(ptr as *mut u8),
+                    ptr: ptr,
                     len: len as usize,
                 })
             }
@@ -211,7 +210,7 @@ impl Mmap {
             let handle = libc::CreateFileMappingW(libc::INVALID_HANDLE_VALUE,
                                                   ptr::null_mut(),
                                                   prot.as_page_flags(),
-                                                  (len >> 32) as libc::DWORD,
+                                                  (len >> 16 >> 16) as libc::DWORD,
                                                   (len & 0xffffffff) as libc::DWORD,
                                                   ptr::null());
             if handle == ptr::null_mut() {
@@ -224,7 +223,7 @@ impl Mmap {
                 Err(io::Error::last_os_error())
             } else {
                 Ok(Mmap {
-                    ptr: ptr::Unique::new(ptr as *mut u8),
+                    ptr: ptr,
                     len: len as usize,
                 })
             }
@@ -232,6 +231,32 @@ impl Mmap {
     }
 }
 
+#[cfg(any(target_os = "linux",
+          target_os = "android",
+          target_os = "macos",
+          target_os = "ios",
+          target_os = "freebsd",
+          target_os = "dragonfly",
+          target_os = "bitrig",
+          target_os = "openbsd"))]
+impl Drop for Mmap {
+    fn drop(&mut self) {
+        unsafe {
+            assert!(libc::munmap(self.ptr, self.len as libc::size_t) == 0,
+                    "unable to unmap mmap: {}", io::Error::last_os_error());
+        }
+    }
+}
+
+#[cfg(target_os = "windows")]
+impl Drop for Mmap {
+    fn drop(&mut self) {
+        unsafe {
+            assert!(libc::UnmapViewOfFile(self.ptr) != 0,
+                    "unable to unmap mmap: {}", io::Error::last_os_error());
+        }
+    }
+}
 
 impl Mmap {
     pub fn len(&self) -> usize {
@@ -244,14 +269,14 @@ impl Deref for Mmap {
     type Target = [u8];
 
     fn deref(&self) -> &[u8] {
-        unsafe { slice::from_raw_parts(self.ptr.get(), self.len) }
+        unsafe { slice::from_raw_parts(self.ptr as *const u8, self.len) }
     }
 }
 
 impl DerefMut for Mmap {
 
     fn deref_mut(&mut self) -> &mut [u8] {
-        unsafe { slice::from_raw_parts_mut(self.ptr.get_mut(), self.len) }
+        unsafe { slice::from_raw_parts_mut(self.ptr as *mut u8, self.len) }
     }
 }
 
