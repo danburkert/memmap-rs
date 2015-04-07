@@ -14,33 +14,100 @@ use std::ops::{
 };
 use std::path::Path;
 
-#[cfg(any(target_os = "linux",
-          target_os = "android",
-          target_os = "macos",
-          target_os = "ios",
-          target_os = "freebsd",
-          target_os = "dragonfly",
-          target_os = "bitrig",
-          target_os = "openbsd"))]
-bitflags! {
-    #[doc="Memory protection options"]
-    #[derive(Debug)]
-    flags Protection: libc::c_int {
+use Protection::*;
 
-        #[doc="Pages may not be accessed"]
-        const NONE = libc::PROT_NONE,
+/// Memory protection options
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Protection {
 
-        #[doc="Pages may be executed"]
-        const EXEC = libc::PROT_EXEC,
+    /// Pages may not be accessed
+    None,
 
-        #[doc="Pages may be read"]
-        const READ = libc::PROT_READ,
+    /// Pages may be read
+    Read,
 
-        #[doc="Pages may be written"]
-        const WRITE = libc::PROT_WRITE,
+    /// Pages may be read or written
+    ReadWrite,
 
-        #[doc="Pages may be read and written"]
-        const READ_WRITE = libc::PROT_READ | libc::PROT_WRITE,
+    /// Pages may be executed and read
+    ExecRead,
+
+    /// Pages may be executed, read, and written
+    ExecReadWrite,
+}
+
+impl Protection {
+
+    #[cfg(any(target_os = "linux",
+              target_os = "android",
+              target_os = "macos",
+              target_os = "ios",
+              target_os = "freebsd",
+              target_os = "dragonfly",
+              target_os = "bitrig",
+              target_os = "openbsd"))]
+    fn as_flag(self) -> libc::c_int {
+        match self {
+            None => libc::PROT_NONE,
+            Read => libc::PROT_READ,
+            ReadWrite => libc::PROT_READ | libc::PROT_WRITE,
+            ExecRead => libc::PROT_EXEC | libc::PROT_READ,
+            ExecReadWrite => libc::PROT_EXEC | libc::PROT_READ | libc::PROT_WRITE,
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    fn as_page_flags(self) -> libc::DWORD {
+        match self {
+            None => 0,
+            Read => libc::PAGE_READONLY,
+            ReadWrite => libc::PAGE_READWRITE,
+            ExecRead => libc::PAGE_EXECUTE_READ,
+            ExecReadWrite => libc::PAGE_EXECUTE_READWRITE,
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    fn as_file_flags(self) -> libc::DWORD {
+        match self {
+            None => 0,
+            Read => libc::FILE_MAP_READ,
+            ReadWrite => libc::FILE_MAP_READ | libc::FILE_MAP_WRITE,
+            ExecRead => libc::FILE_MAP_READ | libc::FILE_MAP_EXECUTE,
+            ExecReadWrite => libc::FILE_MAP_READ | libc::FILE_MAP_WRITE | libc::FILE_MAP_EXECUTE,
+        }
+    }
+
+    fn as_open_options(self) -> fs::OpenOptions {
+        let mut options = fs::OpenOptions::new();
+        options.read(self.read())
+               .write(self.write());
+
+        options
+    }
+
+    /// Returns `true` if the Protection is executable.
+    pub fn execute(self) -> bool {
+        match self {
+            ExecRead | ExecReadWrite => true,
+            _ => false,
+        }
+    }
+
+    /// Returns `true` if the Protection is readable.
+    pub fn read(self) -> bool {
+        match self {
+            Read | ReadWrite | ExecRead | ExecReadWrite => true,
+            _ => false,
+        }
+    }
+
+    /// Returns `true` if the Protection is writable.
+    pub fn write(self) -> bool {
+        match self {
+            ReadWrite | ExecReadWrite => true,
+            _ => false,
+        }
     }
 }
 
@@ -59,21 +126,18 @@ pub struct Mmap {
           target_os = "openbsd"))]
 impl Mmap {
 
-    pub fn open<P>(path: P,
-                   prot: Protection)
-                   -> io::Result<Mmap>
-    where P: AsRef<Path> {
-        use std::os::unix::io::AsRawFd;
-        let mut options = fs::OpenOptions::new();
-        options.read(prot.contains(READ))
-               .write(prot.contains(WRITE));
-
-        let file = try!(options.open(path));
-        let fd = file.as_raw_fd();
+    /// Open a file-backed memory map.
+    pub fn open<P>(path: P, prot: Protection) -> io::Result<Mmap> where P: AsRef<Path> {
+        let file = try!(prot.as_open_options().open(path));
         let len = try!(file.metadata()).len();
 
         let ptr = unsafe {
-            libc::mmap(ptr::null_mut(), len as libc::size_t, prot.bits(), libc::MAP_SHARED, fd, 0)
+            libc::mmap(ptr::null_mut(),
+                       len as libc::size_t,
+                       prot.as_flag(),
+                       libc::MAP_SHARED,
+                       std::os::unix::io::AsRawFd::as_raw_fd(&file),
+                       0)
         };
 
         if ptr == libc::MAP_FAILED {
@@ -86,11 +150,12 @@ impl Mmap {
         }
     }
 
+    /// Open an anonymous memory map.
     pub fn anonymous(len: usize, prot: Protection) -> io::Result<Mmap> {
         let ptr = unsafe {
             libc::mmap(ptr::null_mut(),
                        len as libc::size_t,
-                       prot.bits(),
+                       prot.as_flag(),
                        libc::MAP_SHARED | libc::MAP_ANON,
                        -1,
                        0)
@@ -106,6 +171,67 @@ impl Mmap {
         }
     }
 }
+
+#[cfg(target_os = "windows")]
+impl Mmap {
+
+    pub fn open<P>(path: P, prot: Protection) -> io::Result<Mmap>
+    where P: AsRef<Path> {
+        let file = try!(prot.as_open_options().open(path));
+        let len = try!(file.metadata()).len();
+
+        unsafe {
+            let handle = libc::CreateFileMappingW(std::os::windows::io::AsRawHandle::as_raw_handle(&file) as *mut libc::c_void,
+                                                  ptr::null_mut(),
+                                                  prot.as_page_flags(),
+                                                  0,
+                                                  0,
+                                                  ptr::null());
+            if handle == ptr::null_mut() {
+                return Err(io::Error::last_os_error());
+            }
+
+            let ptr = libc::MapViewOfFile(handle, prot.as_file_flags(), 0, 0, len as libc::SIZE_T);
+            libc::CloseHandle(handle);
+
+            if ptr == ptr::null_mut() {
+                Err(io::Error::last_os_error())
+            } else {
+                Ok(Mmap {
+                    ptr: ptr::Unique::new(ptr as *mut u8),
+                    len: len as usize,
+                })
+            }
+        }
+
+    }
+
+    pub fn anonymous(len: usize, prot: Protection) -> io::Result<Mmap> {
+        unsafe {
+            let handle = libc::CreateFileMappingW(libc::INVALID_HANDLE_VALUE,
+                                                  ptr::null_mut(),
+                                                  prot.as_page_flags(),
+                                                  (len >> 32) as libc::DWORD,
+                                                  (len & 0xffffffff) as libc::DWORD,
+                                                  ptr::null());
+            if handle == ptr::null_mut() {
+                return Err(io::Error::last_os_error());
+            }
+            let ptr = libc::MapViewOfFile(handle, prot.as_file_flags(), 0, 0, len as libc::SIZE_T);
+            libc::CloseHandle(handle);
+
+            if ptr == ptr::null_mut() {
+                Err(io::Error::last_os_error())
+            } else {
+                Ok(Mmap {
+                    ptr: ptr::Unique::new(ptr as *mut u8),
+                    len: len as usize,
+                })
+            }
+        }
+    }
+}
+
 
 impl Mmap {
     pub fn len(&self) -> usize {
@@ -243,7 +369,7 @@ mod test {
                         .open(&path).unwrap()
                         .set_len(env::page_size() as u64).unwrap();
 
-        let mut mmap = Mmap::open(path, READ | WRITE).unwrap();
+        let mut mmap = Mmap::open(path, Protection::ReadWrite).unwrap();
         let len = mmap.len();
 
         let zeros = iter::repeat(0).take(len).collect::<Vec<_>>();
@@ -261,7 +387,7 @@ mod test {
 
     #[test]
     fn anon_page_boundary() {
-        let mut mmap = Mmap::anonymous(env::page_size(), READ | WRITE).unwrap();
+        let mut mmap = Mmap::anonymous(env::page_size(), Protection::ReadWrite).unwrap();
         let len = mmap.len();
 
         let zeros = iter::repeat(0).take(len).collect::<Vec<_>>();
