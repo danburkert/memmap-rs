@@ -4,6 +4,9 @@
 extern crate bitflags;
 extern crate libc;
 
+#[cfg(target_os = "windows")]
+extern crate kernel32;
+
 use std::{fs, io, ptr, slice};
 use std::borrow::{Borrow, BorrowMut};
 use std::ops::{
@@ -258,17 +261,17 @@ impl Mmap {
 
     pub fn anonymous(len: usize, prot: Protection) -> io::Result<Mmap> {
         unsafe {
-            let handle = libc::CreateFileMappingW(libc::INVALID_HANDLE_VALUE,
-                                                  ptr::null_mut(),
-                                                  prot.as_page_flags(),
-                                                  (len >> 16 >> 16) as libc::DWORD,
-                                                  (len & 0xffffffff) as libc::DWORD,
-                                                  ptr::null());
+            let handle = kernel32::CreateFileMappingW(libc::INVALID_HANDLE_VALUE,
+                                                      ptr::null_mut(),
+                                                      prot.as_page_flags(),
+                                                      (len >> 16 >> 16) as libc::DWORD,
+                                                      (len & 0xffffffff) as libc::DWORD,
+                                                      ptr::null());
             if handle == ptr::null_mut() {
                 return Err(io::Error::last_os_error());
             }
-            let ptr = libc::MapViewOfFile(handle, prot.as_file_flags(), 0, 0, len as libc::SIZE_T);
-            libc::CloseHandle(handle);
+            let ptr = kernel32::MapViewOfFile(handle, prot.as_file_flags(), 0, 0, len as libc::SIZE_T);
+            kernel32::CloseHandle(handle);
 
             if ptr == ptr::null_mut() {
                 Err(io::Error::last_os_error())
@@ -288,16 +291,12 @@ impl Mmap {
     }
 
     pub fn flush_async(&mut self) -> io::Result<()> {
-        // TODO: reenable when rust-lang/rust/pull/24174 is merged
-        /*
-        let result = unsafe { libc::FlushViewOfFile(self.ptr, 0) };
+        let result = unsafe { kernel32::FlushViewOfFile(self.ptr, 0) };
         if result != 0 {
             Ok(())
         } else {
             Err(io::Error::last_os_error())
         }
-        */
-        Ok(())
     }
 }
 
@@ -305,7 +304,7 @@ impl Mmap {
 impl Drop for Mmap {
     fn drop(&mut self) {
         unsafe {
-            assert!(libc::UnmapViewOfFile(self.ptr) != 0,
+            assert!(kernel32::UnmapViewOfFile(self.ptr) != 0,
                     "unable to unmap mmap: {}", io::Error::last_os_error());
         }
     }

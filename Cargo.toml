@@ -9,3 +9,11 @@ libc = "*"
 
 [dev-dependencies]
 tempdir = "*"
+
+[target.x86_64-pc-windows-gnu.dependencies.kernel32-sys]
+git = "https://github.com/danburkert/winapi-rs.git"
+path = "lib/kernel32-sys"
+
+[target.i686-pc-windows-gnu.dependencies.kernel32-sys]
+git = "https://github.com/danburkert/winapi-rs.git"
+path = "lib/kernel32-sys"
