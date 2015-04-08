@@ -1,3 +1,5 @@
+//! A cross-platform Rust API for memory-mapped file IO.
+
 #![cfg_attr(test, feature(page_size))]
 
 #[macro_use]
@@ -42,7 +44,7 @@ use std::path::Path;
 
 use MapKind::*;
 
-/// Memory map kind
+/// Memory map kind.
 ///
 /// Determines how a memory map may be used. If the memory map is backed by a file, then the file
 /// must have at least the permissions required by the `MapKind`.
@@ -81,30 +83,63 @@ impl MapKind {
     }
 }
 
+/// A memory-mapped buffer.
+///
+/// A file-backed `Mmap` buffer may be used to read or write data to a file. Use `Mmap::open(..)` to
+/// create a file-backed memory map. An anonymous `Mmap` buffer may be used any place that an
+/// in-memory byte buffer is needed, and gives the added features of a memory map. Use
+/// `Mmap::anonymous(..)` to create an anonymous memory map.
+///
+/// Changes written to a memory-mapped file are not guaranteed to be durable until the memory map is
+/// flushed, or it is dropped.
+///
+/// ```
+/// use std::io::Write;
+/// use mmap::{Mmap, MapKind};
+///
+/// let file_mmap = Mmap::open("README.md", MapKind::Read).unwrap();
+/// let bytes: &[u8] = &*file_mmap;
+/// assert_eq!(b"# mmap", &file_mmap[0..6]);
+///
+/// let mut anon_mmap = Mmap::anonymous(4096, MapKind::ReadWrite).unwrap();
+/// (&mut *anon_mmap).write(b"foo").unwrap();
+/// assert_eq!(b"foo\0\0", &anon_mmap[0..5]);
+/// ```
 pub struct Mmap {
     inner: MmapInner
 }
 
 impl Mmap {
 
-    /// Open a file-backed memory map.
+    /// Opens a file-backed memory map.
     pub fn open<P>(path: P, kind: MapKind) -> io::Result<Mmap> where P: AsRef<Path> {
         MmapInner::open(path, kind).map(|inner| Mmap { inner: inner })
     }
 
-    /// Open an anonymous memory map.
+    /// Opens an anonymous memory map.
     pub fn anonymous(len: usize, kind: MapKind) -> io::Result<Mmap> {
         MmapInner::anonymous(len, kind).map(|inner| Mmap { inner: inner })
     }
 
+    /// Flushes outstanding memory map modifications to disk.
+    ///
+    /// When this returns with a non-error result, all outstanding changes to a file-backed memory
+    /// map are guaranteed to be durably stored. The file's metadata (including last modification
+    /// timestamp) may not be updated.
     pub fn flush(&mut self) -> io::Result<()> {
         self.inner.flush()
     }
 
+    /// Asynchronously flushes outstanding memory map modifications to disk.
+    ///
+    /// This method initiates flushing modified pages to durable storage, but it will not wait
+    /// for the operation to complete before returning. The file's metadata (including last
+    /// modification timestamp) may not be updated.
     pub fn flush_async(&mut self) -> io::Result<()> {
         self.inner.flush_async()
     }
 
+    /// Returns the length of the memory map.
     pub fn len(&self) -> usize {
         self.inner.len()
     }
