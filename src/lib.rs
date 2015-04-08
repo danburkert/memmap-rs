@@ -7,7 +7,31 @@ extern crate libc;
 #[cfg(target_os = "windows")]
 extern crate kernel32;
 
-use std::{fs, io, ptr, slice};
+#[cfg(target_os = "windows")]
+mod windows;
+#[cfg(target_os = "windows")]
+use windows::MmapInner;
+
+#[cfg(any(target_os = "linux",
+          target_os = "android",
+          target_os = "macos",
+          target_os = "ios",
+          target_os = "freebsd",
+          target_os = "dragonfly",
+          target_os = "bitrig",
+          target_os = "openbsd"))]
+mod posix;
+#[cfg(any(target_os = "linux",
+          target_os = "android",
+          target_os = "macos",
+          target_os = "ios",
+          target_os = "freebsd",
+          target_os = "dragonfly",
+          target_os = "bitrig",
+          target_os = "openbsd"))]
+use posix::MmapInner;
+
+use std::{fs, io};
 use std::borrow::{Borrow, BorrowMut};
 use std::ops::{
     Deref, DerefMut,
@@ -39,46 +63,6 @@ pub enum Protection {
 }
 
 impl Protection {
-
-    #[cfg(any(target_os = "linux",
-              target_os = "android",
-              target_os = "macos",
-              target_os = "ios",
-              target_os = "freebsd",
-              target_os = "dragonfly",
-              target_os = "bitrig",
-              target_os = "openbsd"))]
-    fn as_flag(self) -> libc::c_int {
-        match self {
-            None => libc::PROT_NONE,
-            Read => libc::PROT_READ,
-            ReadWrite => libc::PROT_READ | libc::PROT_WRITE,
-            ExecRead => libc::PROT_EXEC | libc::PROT_READ,
-            ExecReadWrite => libc::PROT_EXEC | libc::PROT_READ | libc::PROT_WRITE,
-        }
-    }
-
-    #[cfg(target_os = "windows")]
-    fn as_page_flags(self) -> libc::DWORD {
-        match self {
-            None => 0,
-            Read => libc::PAGE_READONLY,
-            ReadWrite => libc::PAGE_READWRITE,
-            ExecRead => libc::PAGE_EXECUTE_READ,
-            ExecReadWrite => libc::PAGE_EXECUTE_READWRITE,
-        }
-    }
-
-    #[cfg(target_os = "windows")]
-    fn as_file_flags(self) -> libc::DWORD {
-        match self {
-            None => 0,
-            Read => libc::FILE_MAP_READ,
-            ReadWrite => libc::FILE_MAP_READ | libc::FILE_MAP_WRITE,
-            ExecRead => libc::FILE_MAP_READ | libc::FILE_MAP_EXECUTE,
-            ExecReadWrite => libc::FILE_MAP_READ | libc::FILE_MAP_WRITE | libc::FILE_MAP_EXECUTE,
-        }
-    }
 
     fn as_open_options(self) -> fs::OpenOptions {
         let mut options = fs::OpenOptions::new();
@@ -113,222 +97,47 @@ impl Protection {
     }
 }
 
-#[cfg(any(target_os = "linux",
-          target_os = "android",
-          target_os = "macos",
-          target_os = "ios",
-          target_os = "freebsd",
-          target_os = "dragonfly",
-          target_os = "bitrig",
-          target_os = "openbsd"))]
 pub struct Mmap {
-    ptr: *mut libc::c_void,
-    len: usize,
+    inner: MmapInner
 }
 
-#[cfg(any(target_os = "linux",
-          target_os = "android",
-          target_os = "macos",
-          target_os = "ios",
-          target_os = "freebsd",
-          target_os = "dragonfly",
-          target_os = "bitrig",
-          target_os = "openbsd"))]
+
 impl Mmap {
 
     /// Open a file-backed memory map.
     pub fn open<P>(path: P, prot: Protection) -> io::Result<Mmap> where P: AsRef<Path> {
-        let file = try!(prot.as_open_options().open(path));
-        let len = try!(file.metadata()).len();
-
-        let ptr = unsafe {
-            libc::mmap(ptr::null_mut(),
-                       len as libc::size_t,
-                       prot.as_flag(),
-                       libc::MAP_SHARED,
-                       std::os::unix::io::AsRawFd::as_raw_fd(&file),
-                       0)
-        };
-
-        if ptr == libc::MAP_FAILED {
-            Err(io::Error::last_os_error())
-        } else {
-            Ok(Mmap {
-                ptr: ptr,
-                len: len as usize,
-            })
-        }
+        MmapInner::open(path, prot).map(|inner| Mmap { inner: inner })
     }
 
     /// Open an anonymous memory map.
     pub fn anonymous(len: usize, prot: Protection) -> io::Result<Mmap> {
-        let ptr = unsafe {
-            libc::mmap(ptr::null_mut(),
-                       len as libc::size_t,
-                       prot.as_flag(),
-                       libc::MAP_SHARED | libc::MAP_ANON,
-                       -1,
-                       0)
-        };
-
-        if ptr == libc::MAP_FAILED {
-            Err(io::Error::last_os_error())
-        } else {
-            Ok(Mmap {
-                ptr: ptr,
-                len: len as usize,
-            })
-        }
+        MmapInner::anonymous(len, prot).map(|inner| Mmap { inner: inner })
     }
 
     pub fn flush(&mut self) -> io::Result<()> {
-        let result = unsafe { libc::msync(self.ptr, self.len as libc::size_t, libc::MS_SYNC) };
-        if result == 0 {
-            Ok(())
-        } else {
-            Err(io::Error::last_os_error())
-        }
+        self.inner.flush()
     }
 
     pub fn flush_async(&mut self) -> io::Result<()> {
-        let result = unsafe { libc::msync(self.ptr, self.len as libc::size_t, libc::MS_ASYNC) };
-        if result == 0 {
-            Ok(())
-        } else {
-            Err(io::Error::last_os_error())
-        }
-
-    }
-}
-
-#[cfg(any(target_os = "linux",
-          target_os = "android",
-          target_os = "macos",
-          target_os = "ios",
-          target_os = "freebsd",
-          target_os = "dragonfly",
-          target_os = "bitrig",
-          target_os = "openbsd"))]
-impl Drop for Mmap {
-    fn drop(&mut self) {
-        unsafe {
-            assert!(libc::munmap(self.ptr, self.len as libc::size_t) == 0,
-                    "unable to unmap mmap: {}", io::Error::last_os_error());
-        }
-    }
-}
-
-#[cfg(target_os = "windows")]
-pub struct Mmap {
-    file: Option<fs::File>,
-    ptr: *mut libc::c_void,
-    len: usize,
-}
-
-#[cfg(target_os = "windows")]
-impl Mmap {
-
-    pub fn open<P>(path: P, prot: Protection) -> io::Result<Mmap>
-    where P: AsRef<Path> {
-        let file = try!(prot.as_open_options().open(path));
-        let len = try!(file.metadata()).len();
-
-        unsafe {
-            let handle = libc::CreateFileMappingW(std::os::windows::io::AsRawHandle::as_raw_handle(&file) as *mut libc::c_void,
-                                                  ptr::null_mut(),
-                                                  prot.as_page_flags(),
-                                                  0,
-                                                  0,
-                                                  ptr::null());
-            if handle == ptr::null_mut() {
-                return Err(io::Error::last_os_error());
-            }
-
-            let ptr = libc::MapViewOfFile(handle, prot.as_file_flags(), 0, 0, len as libc::SIZE_T);
-            libc::CloseHandle(handle);
-
-            if ptr == ptr::null_mut() {
-                Err(io::Error::last_os_error())
-            } else {
-                Ok(Mmap {
-                    file: Some(file),
-                    ptr: ptr,
-                    len: len as usize,
-                })
-            }
-        }
+        self.inner.flush_async()
     }
 
-    pub fn anonymous(len: usize, prot: Protection) -> io::Result<Mmap> {
-        unsafe {
-            let handle = kernel32::CreateFileMappingW(libc::INVALID_HANDLE_VALUE,
-                                                      ptr::null_mut(),
-                                                      prot.as_page_flags(),
-                                                      (len >> 16 >> 16) as libc::DWORD,
-                                                      (len & 0xffffffff) as libc::DWORD,
-                                                      ptr::null());
-            if handle == ptr::null_mut() {
-                return Err(io::Error::last_os_error());
-            }
-            let ptr = kernel32::MapViewOfFile(handle, prot.as_file_flags(), 0, 0, len as libc::SIZE_T);
-            kernel32::CloseHandle(handle);
-
-            if ptr == ptr::null_mut() {
-                Err(io::Error::last_os_error())
-            } else {
-                Ok(Mmap {
-                    file: Option::None,
-                    ptr: ptr,
-                    len: len as usize,
-                })
-            }
-        }
-    }
-
-    pub fn flush(&mut self) -> io::Result<()> {
-        try!(self.flush_async());
-        if let Some(ref mut file) = self.file { file.sync_data() } else { Ok(()) }
-    }
-
-    pub fn flush_async(&mut self) -> io::Result<()> {
-        let result = unsafe { kernel32::FlushViewOfFile(self.ptr, 0) };
-        if result != 0 {
-            Ok(())
-        } else {
-            Err(io::Error::last_os_error())
-        }
-    }
-}
-
-#[cfg(target_os = "windows")]
-impl Drop for Mmap {
-    fn drop(&mut self) {
-        unsafe {
-            assert!(kernel32::UnmapViewOfFile(self.ptr) != 0,
-                    "unable to unmap mmap: {}", io::Error::last_os_error());
-        }
-    }
-}
-
-impl Mmap {
     pub fn len(&self) -> usize {
-        self.len
+        self.inner.len()
     }
 }
 
 impl Deref for Mmap {
-
     type Target = [u8];
 
     fn deref(&self) -> &[u8] {
-        unsafe { slice::from_raw_parts(self.ptr as *const u8, self.len) }
+        &*self.inner
     }
 }
 
 impl DerefMut for Mmap {
-
     fn deref_mut(&mut self) -> &mut [u8] {
-        unsafe { slice::from_raw_parts_mut(self.ptr as *mut u8, self.len) }
+        &mut *self.inner
     }
 }
 
