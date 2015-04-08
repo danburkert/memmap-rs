@@ -5,29 +5,25 @@ use std::path::Path;
 use kernel32;
 use libc;
 
-use ::Protection;
+use ::MapKind;
 
-impl Protection {
+impl MapKind {
 
-    /// Returns the `Protection` as a Windows `PAGE` flag.
-    fn as_page_flags(self) -> libc::DWORD {
+    /// Returns the `MapKind` as a flag appropriate for a call to `CreateFileMapping`.
+    fn as_mapping_flag(self) -> libc::DWORD {
         match self {
-            Protection::None => 0,
-            Protection::Read => libc::PAGE_READONLY,
-            Protection::ReadWrite => libc::PAGE_READWRITE,
-            Protection::ExecRead => libc::PAGE_EXECUTE_READ,
-            Protection::ExecReadWrite => libc::PAGE_EXECUTE_READWRITE,
+            MapKind::Read => libc::PAGE_READONLY,
+            MapKind::ReadWrite => libc::PAGE_READWRITE,
+            MapKind::ReadCopy => libc::PAGE_READONLY,
         }
     }
 
-    /// Returns the `Protection` as a Windows `FILE_MAP` flag.
-    fn as_file_flags(self) -> libc::DWORD {
+    /// Returns the `MapKind` as a flag appropriate for a call to `MapViewOfFile`.
+    fn as_view_flag(self) -> libc::DWORD {
         match self {
-            Protection::None => 0,
-            Protection::Read => libc::FILE_MAP_READ,
-            Protection::ReadWrite => libc::FILE_MAP_READ | libc::FILE_MAP_WRITE,
-            Protection::ExecRead => libc::FILE_MAP_READ | libc::FILE_MAP_EXECUTE,
-            Protection::ExecReadWrite => libc::FILE_MAP_READ | libc::FILE_MAP_WRITE | libc::FILE_MAP_EXECUTE,
+            MapKind::Read => libc::FILE_MAP_READ,
+            MapKind::ReadWrite => libc::FILE_MAP_ALL_ACCESS,
+            MapKind::ReadCopy => libc::FILE_MAP_COPY,
         }
     }
 }
@@ -40,15 +36,15 @@ pub struct MmapInner {
 
 impl MmapInner {
 
-    pub fn open<P>(path: P, prot: Protection) -> io::Result<MmapInner>
+    pub fn open<P>(path: P, kind: MapKind) -> io::Result<MmapInner>
     where P: AsRef<Path> {
-        let file = try!(prot.as_open_options().open(path));
+        let file = try!(kind.as_open_options().open(path));
         let len = try!(file.metadata()).len();
 
         unsafe {
             let handle = libc::CreateFileMappingW(std::os::windows::io::AsRawHandle::as_raw_handle(&file) as *mut libc::c_void,
                                                   ptr::null_mut(),
-                                                  prot.as_page_flags(),
+                                                  kind.as_mapping_flag(),
                                                   0,
                                                   0,
                                                   ptr::null());
@@ -56,7 +52,7 @@ impl MmapInner {
                 return Err(io::Error::last_os_error());
             }
 
-            let ptr = libc::MapViewOfFile(handle, prot.as_file_flags(), 0, 0, len as libc::SIZE_T);
+            let ptr = libc::MapViewOfFile(handle, kind.as_view_flag(), 0, 0, len as libc::SIZE_T);
             libc::CloseHandle(handle);
 
             if ptr == ptr::null_mut() {
@@ -71,18 +67,18 @@ impl MmapInner {
         }
     }
 
-    pub fn anonymous(len: usize, prot: Protection) -> io::Result<MmapInner> {
+    pub fn anonymous(len: usize, kind: MapKind) -> io::Result<MmapInner> {
         unsafe {
             let handle = kernel32::CreateFileMappingW(libc::INVALID_HANDLE_VALUE,
                                                       ptr::null_mut(),
-                                                      prot.as_page_flags(),
+                                                      kind.as_mapping_flag(),
                                                       (len >> 16 >> 16) as libc::DWORD,
                                                       (len & 0xffffffff) as libc::DWORD,
                                                       ptr::null());
             if handle == ptr::null_mut() {
                 return Err(io::Error::last_os_error());
             }
-            let ptr = kernel32::MapViewOfFile(handle, prot.as_file_flags(), 0, 0, len as libc::SIZE_T);
+            let ptr = kernel32::MapViewOfFile(handle, kind.as_view_flag(), 0, 0, len as libc::SIZE_T);
             kernel32::CloseHandle(handle);
 
             if ptr == ptr::null_mut() {

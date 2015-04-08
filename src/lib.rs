@@ -40,58 +40,42 @@ use std::ops::{
 };
 use std::path::Path;
 
-use Protection::*;
+use MapKind::*;
 
-/// Memory protection options
+/// Memory map kind
+///
+/// Determines how a memory map may be used. If the memory map is backed by a file, then the file
+/// must have at least the permissions required by the `MapKind`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Protection {
+pub enum MapKind {
 
-    /// Pages may not be accessed
-    None,
-
-    /// Pages may be read
+    /// A read-only memory map. Writes to the memory map will result in a panic.
     Read,
 
-    /// Pages may be read or written
+    /// A read-write memory map. Writes to the memory map will be reflected in the file after a
+    /// call to `Mmap::flush` or after the `Mmap` is dropped.
     ReadWrite,
 
-    /// Pages may be executed and read
-    ExecRead,
-
-    /// Pages may be executed, read, and written
-    ExecReadWrite,
+    /// A read, copy-on-write memory map. Writes to the memory map will not be carried through to
+    /// the underlying file. It is unspecified whether changes made to the file after the memory map
+    /// is created will be visible.
+    ReadCopy,
 }
 
-impl Protection {
+impl MapKind {
 
     fn as_open_options(self) -> fs::OpenOptions {
         let mut options = fs::OpenOptions::new();
-        options.read(self.read())
+        options.read(true)
                .write(self.write());
 
         options
     }
 
-    /// Returns `true` if the Protection is executable.
-    pub fn execute(self) -> bool {
-        match self {
-            ExecRead | ExecReadWrite => true,
-            _ => false,
-        }
-    }
-
-    /// Returns `true` if the Protection is readable.
-    pub fn read(self) -> bool {
-        match self {
-            Read | ReadWrite | ExecRead | ExecReadWrite => true,
-            _ => false,
-        }
-    }
-
-    /// Returns `true` if the Protection is writable.
+    /// Returns `true` if the `MapKind` is writable.
     pub fn write(self) -> bool {
         match self {
-            ReadWrite | ExecReadWrite => true,
+            ReadWrite | ReadCopy => true,
             _ => false,
         }
     }
@@ -101,17 +85,16 @@ pub struct Mmap {
     inner: MmapInner
 }
 
-
 impl Mmap {
 
     /// Open a file-backed memory map.
-    pub fn open<P>(path: P, prot: Protection) -> io::Result<Mmap> where P: AsRef<Path> {
-        MmapInner::open(path, prot).map(|inner| Mmap { inner: inner })
+    pub fn open<P>(path: P, kind: MapKind) -> io::Result<Mmap> where P: AsRef<Path> {
+        MmapInner::open(path, kind).map(|inner| Mmap { inner: inner })
     }
 
     /// Open an anonymous memory map.
-    pub fn anonymous(len: usize, prot: Protection) -> io::Result<Mmap> {
-        MmapInner::anonymous(len, prot).map(|inner| Mmap { inner: inner })
+    pub fn anonymous(len: usize, kind: MapKind) -> io::Result<Mmap> {
+        MmapInner::anonymous(len, kind).map(|inner| Mmap { inner: inner })
     }
 
     pub fn flush(&mut self) -> io::Result<()> {
@@ -256,7 +239,7 @@ mod test {
                         .open(&path).unwrap()
                         .set_len(expected_len as u64).unwrap();
 
-        let mut mmap = Mmap::open(path, Protection::ReadWrite).unwrap();
+        let mut mmap = Mmap::open(path, MapKind::ReadWrite).unwrap();
         let len = mmap.len();
         assert_eq!(expected_len, len);
 
@@ -284,14 +267,14 @@ mod test {
                         .create(true)
                         .open(&path).unwrap();
 
-        assert!(Mmap::open(path, Protection::ReadWrite).is_err());
+        assert!(Mmap::open(path, MapKind::ReadWrite).is_err());
     }
 
 
     #[test]
     fn map_anon() {
         let expected_len = env::page_size() * 7 + 13;
-        let mut mmap = Mmap::anonymous(expected_len, Protection::ReadWrite).unwrap();
+        let mut mmap = Mmap::anonymous(expected_len, MapKind::ReadWrite).unwrap();
         let len = mmap.len();
         assert_eq!(expected_len, len);
 
@@ -323,11 +306,45 @@ mod test {
         let write = b"abc123";
         let mut read = [0u8; 6];
 
-        let mut mmap = Mmap::open(&path, Protection::ReadWrite).unwrap();
+        let mut mmap = Mmap::open(&path, MapKind::ReadWrite).unwrap();
         (&mut mmap[..]).write(write).unwrap();
         mmap.flush().unwrap();
 
         file.read(&mut read).unwrap();
         assert_eq!(write, &read);
+    }
+
+    #[test]
+    fn map_copy() {
+        let tempdir = tempdir::TempDir::new("mmap").unwrap();
+        let path = tempdir.path().join("mmap");
+
+        let mut file = fs::OpenOptions::new()
+                                       .read(true)
+                                       .write(true)
+                                       .create(true)
+                                       .open(&path).unwrap();
+        file.set_len(128).unwrap();
+
+        let nulls = b"\0\0\0\0\0\0";
+        let write = b"abc123";
+        let mut read = [0u8; 6];
+
+        let mut mmap = Mmap::open(&path, MapKind::ReadCopy).unwrap();
+        (&mut mmap[..]).write(write).unwrap();
+        mmap.flush().unwrap();
+
+        // The mmap contains the write
+        (&*mmap).read(&mut read).unwrap();
+        assert_eq!(write, &read);
+
+        // The file does not contain the write
+        file.read(&mut read).unwrap();
+        assert_eq!(nulls, &read);
+
+        // another mmap does not contain the write
+        let mmap2 = Mmap::open(&path, MapKind::Read).unwrap();
+        (&*mmap2).read(&mut read).unwrap();
+        assert_eq!(nulls, &read);
     }
 }
