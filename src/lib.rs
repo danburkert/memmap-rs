@@ -42,14 +42,14 @@ use std::ops::{
 };
 use std::path::Path;
 
-use MapKind::*;
+use Protection::*;
 
-/// Memory map kind.
+/// Memory map protection.
 ///
 /// Determines how a memory map may be used. If the memory map is backed by a file, then the file
-/// must have at least the permissions required by the `MapKind`.
+/// must have permissions corresponding to the operations the protection level allows.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum MapKind {
+pub enum Protection {
 
     /// A read-only memory map. Writes to the memory map will result in a panic.
     Read,
@@ -64,7 +64,7 @@ pub enum MapKind {
     ReadCopy,
 }
 
-impl MapKind {
+impl Protection {
 
     fn as_open_options(self) -> fs::OpenOptions {
         let mut options = fs::OpenOptions::new();
@@ -74,7 +74,7 @@ impl MapKind {
         options
     }
 
-    /// Returns `true` if the `MapKind` is writable.
+    /// Returns `true` if the `Protection` is writable.
     pub fn write(self) -> bool {
         match self {
             ReadWrite | ReadCopy => true,
@@ -95,13 +95,13 @@ impl MapKind {
 ///
 /// ```
 /// use std::io::Write;
-/// use mmap::{Mmap, MapKind};
+/// use mmap::{Mmap, Protection};
 ///
-/// let file_mmap = Mmap::open("README.md", MapKind::Read).unwrap();
+/// let file_mmap = Mmap::open("README.md", Protection::Read).unwrap();
 /// let bytes: &[u8] = &*file_mmap;
 /// assert_eq!(b"# mmap", &file_mmap[0..6]);
 ///
-/// let mut anon_mmap = Mmap::anonymous(4096, MapKind::ReadWrite).unwrap();
+/// let mut anon_mmap = Mmap::anonymous(4096, Protection::ReadWrite).unwrap();
 /// (&mut *anon_mmap).write(b"foo").unwrap();
 /// assert_eq!(b"foo\0\0", &anon_mmap[0..5]);
 /// ```
@@ -112,13 +112,13 @@ pub struct Mmap {
 impl Mmap {
 
     /// Opens a file-backed memory map.
-    pub fn open<P>(path: P, kind: MapKind) -> io::Result<Mmap> where P: AsRef<Path> {
-        MmapInner::open(path, kind).map(|inner| Mmap { inner: inner })
+    pub fn open<P>(path: P, prot: Protection) -> io::Result<Mmap> where P: AsRef<Path> {
+        MmapInner::open(path, prot).map(|inner| Mmap { inner: inner })
     }
 
     /// Opens an anonymous memory map.
-    pub fn anonymous(len: usize, kind: MapKind) -> io::Result<Mmap> {
-        MmapInner::anonymous(len, kind).map(|inner| Mmap { inner: inner })
+    pub fn anonymous(len: usize, prot: Protection) -> io::Result<Mmap> {
+        MmapInner::anonymous(len, prot).map(|inner| Mmap { inner: inner })
     }
 
     /// Flushes outstanding memory map modifications to disk.
@@ -274,7 +274,7 @@ mod test {
                         .open(&path).unwrap()
                         .set_len(expected_len as u64).unwrap();
 
-        let mut mmap = Mmap::open(path, MapKind::ReadWrite).unwrap();
+        let mut mmap = Mmap::open(path, Protection::ReadWrite).unwrap();
         let len = mmap.len();
         assert_eq!(expected_len, len);
 
@@ -302,14 +302,14 @@ mod test {
                         .create(true)
                         .open(&path).unwrap();
 
-        assert!(Mmap::open(path, MapKind::ReadWrite).is_err());
+        assert!(Mmap::open(path, Protection::ReadWrite).is_err());
     }
 
 
     #[test]
     fn map_anon() {
         let expected_len = env::page_size() * 7 + 13;
-        let mut mmap = Mmap::anonymous(expected_len, MapKind::ReadWrite).unwrap();
+        let mut mmap = Mmap::anonymous(expected_len, Protection::ReadWrite).unwrap();
         let len = mmap.len();
         assert_eq!(expected_len, len);
 
@@ -341,7 +341,7 @@ mod test {
         let write = b"abc123";
         let mut read = [0u8; 6];
 
-        let mut mmap = Mmap::open(&path, MapKind::ReadWrite).unwrap();
+        let mut mmap = Mmap::open(&path, Protection::ReadWrite).unwrap();
         (&mut mmap[..]).write(write).unwrap();
         mmap.flush().unwrap();
 
@@ -365,7 +365,7 @@ mod test {
         let write = b"abc123";
         let mut read = [0u8; 6];
 
-        let mut mmap = Mmap::open(&path, MapKind::ReadCopy).unwrap();
+        let mut mmap = Mmap::open(&path, Protection::ReadCopy).unwrap();
         (&mut mmap[..]).write(write).unwrap();
         mmap.flush().unwrap();
 
@@ -378,7 +378,7 @@ mod test {
         assert_eq!(nulls, &read);
 
         // another mmap does not contain the write
-        let mmap2 = Mmap::open(&path, MapKind::Read).unwrap();
+        let mmap2 = Mmap::open(&path, Protection::Read).unwrap();
         (&*mmap2).read(&mut read).unwrap();
         assert_eq!(nulls, &read);
     }

@@ -4,24 +4,24 @@ use std::path::Path;
 
 use libc;
 
-use ::MapKind;
+use ::Protection;
 
-impl MapKind {
+impl Protection {
 
-    /// Returns the `MapKind` value as a POSIX protection flag.
-    pub fn as_prot(self) -> libc::c_int {
+    /// Returns the `Protection` value as a POSIX protection flag.
+    fn as_prot(self) -> libc::c_int {
         match self {
-            MapKind::Read => libc::PROT_READ,
-            MapKind::ReadWrite => libc::PROT_READ | libc::PROT_WRITE,
-            MapKind::ReadCopy => libc::PROT_READ | libc::PROT_WRITE,
+            Protection::Read => libc::PROT_READ,
+            Protection::ReadWrite => libc::PROT_READ | libc::PROT_WRITE,
+            Protection::ReadCopy => libc::PROT_READ | libc::PROT_WRITE,
         }
     }
 
-    pub fn as_flag(self) -> libc::c_int {
+    fn as_flag(self) -> libc::c_int {
         match self {
-            MapKind::Read => libc::MAP_SHARED,
-            MapKind::ReadWrite => libc::MAP_SHARED,
-            MapKind::ReadCopy => libc::MAP_PRIVATE,
+            Protection::Read => libc::MAP_SHARED,
+            Protection::ReadWrite => libc::MAP_SHARED,
+            Protection::ReadCopy => libc::MAP_PRIVATE,
         }
     }
 }
@@ -34,15 +34,15 @@ pub struct MmapInner {
 impl MmapInner {
 
     /// Open a file-backed memory map.
-    pub fn open<P>(path: P, kind: MapKind) -> io::Result<MmapInner> where P: AsRef<Path> {
-        let file = try!(kind.as_open_options().open(path));
+    pub fn open<P>(path: P, prot: Protection) -> io::Result<MmapInner> where P: AsRef<Path> {
+        let file = try!(prot.as_open_options().open(path));
         let len = try!(file.metadata()).len();
 
         let ptr = unsafe {
             libc::mmap(ptr::null_mut(),
                        len as libc::size_t,
-                       kind.as_prot(),
-                       kind.as_flag(),
+                       prot.as_prot(),
+                       prot.as_flag(),
                        std::os::unix::io::AsRawFd::as_raw_fd(&file),
                        0)
         };
@@ -58,12 +58,12 @@ impl MmapInner {
     }
 
     /// Open an anonymous memory map.
-    pub fn anonymous(len: usize, kind: MapKind) -> io::Result<MmapInner> {
+    pub fn anonymous(len: usize, prot: Protection) -> io::Result<MmapInner> {
         let ptr = unsafe {
             libc::mmap(ptr::null_mut(),
                        len as libc::size_t,
-                       kind.as_prot(),
-                       kind.as_flag() | libc::MAP_ANON,
+                       prot.as_prot(),
+                       prot.as_flag() | libc::MAP_ANON,
                        -1,
                        0)
         };
