@@ -9,11 +9,12 @@ cross-platform Rust API for memory-mapped file IO.
 
 ## Features
 
-[x] POSIX support
-[x] Windows support
-[x] file-backed memory maps
-[x] anonymous memory maps
-[x] synchronous and asynchrounous flushing
-[x] copy-on-write memory maps
-[x] read-only memory maps
-[ ] virtual memory remapping
+- [x] POSIX support
+- [x] Windows support
+- [x] file-backed memory maps
+- [x] anonymous memory maps
+- [x] synchronous and asynchrounous flushing
+- [x] copy-on-write memory maps
+- [x] read-only memory maps
+- [ ] mirrored anonymous memory maps
+- [ ] virtual memory remapping
