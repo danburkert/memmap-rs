@@ -1,7 +1,5 @@
 //! A cross-platform Rust API for memory-mapped file IO.
 
-#![cfg_attr(test, feature(page_size))]
-
 #[macro_use]
 extern crate bitflags;
 extern crate libc;
@@ -257,14 +255,14 @@ impl IndexMut<RangeFull> for Mmap {
 mod test {
     extern crate tempdir;
 
-    use std::{fs, env, iter};
+    use std::{fs, iter};
     use std::io::{Read, Write};
 
     use super::*;
 
     #[test]
     fn map_file() {
-        let expected_len = env::page_size() * 7 + 13;
+        let expected_len = 128;
         let tempdir = tempdir::TempDir::new("mmap").unwrap();
         let path = tempdir.path().join("mmap");
 
@@ -308,7 +306,7 @@ mod test {
 
     #[test]
     fn map_anon() {
-        let expected_len = env::page_size() * 7 + 13;
+        let expected_len = 128;
         let mut mmap = Mmap::anonymous(expected_len, Protection::ReadWrite).unwrap();
         let len = mmap.len();
         assert_eq!(expected_len, len);
