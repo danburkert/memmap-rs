@@ -7,13 +7,9 @@ authors = ["Dan Burkert <dan@danburkert.com>"]
 bitflags = "*"
 libc = "*"
 
+[dependencies.kernel32-sys]
+git = "https://github.com/retep998/winapi-rs.git"
+path = "lib/kernel32-sys"
+
 [dev-dependencies]
 tempdir = "*"
-
-[target.x86_64-pc-windows-gnu.dependencies.kernel32-sys]
-git = "https://github.com/danburkert/winapi-rs.git"
-path = "lib/kernel32-sys"
-
-[target.i686-pc-windows-gnu.dependencies.kernel32-sys]
-git = "https://github.com/danburkert/winapi-rs.git"
-path = "lib/kernel32-sys"
