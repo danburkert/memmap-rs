@@ -16,5 +16,3 @@ cross-platform Rust API for memory-mapped file IO.
 - [x] synchronous and asynchrounous flushing
 - [x] copy-on-write memory maps
 - [x] read-only memory maps
-- [ ] mirrored anonymous memory maps
-- [ ] virtual memory remapping
