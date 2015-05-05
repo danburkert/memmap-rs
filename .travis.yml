@@ -1,19 +1,20 @@
 language: rust
-sudo: false
+sudo: required
+rust:
+- nightly
+- beta
+before_script:
+- |
+  pip install 'travis-cargo<0.2' --user &&
+  export PATH=$HOME/.local/bin:$PATH
 script:
-  - cargo build --verbose
-  - cargo test --verbose
-  - cargo doc
-after_success: |
-  [ $TRAVIS_BRANCH = master ] &&
-  [ $TRAVIS_PULL_REQUEST = false ] &&
-  echo '<meta http-equiv=refresh content=0;url=uuid/index.html>' > target/doc/index.html &&
-  pip install ghp-import --user $USER &&
-  $HOME/.local/bin/ghp-import -n target/doc &&
-  git push -qf https://${TOKEN}@github.com/${TRAVIS_REPO_SLUG}.git gh-pages
-notifications:
-  email:
-    on_success: never
+- |
+  travis-cargo build &&
+  travis-cargo test &&
+  travis-cargo --only beta doc
+after_success:
+- travis-cargo --only beta doc-upload
 env:
   global:
-    secure: h/8OpyTeeIWqkO9evO6U8rcgLDPL3o8cN1zPauPQTthSCQ6TYJfPvjdS25ClUdprXdXZQCAbZqgO006hPZEoqgRClMgPIiy1656A6Q3+L4VpxAh+B5KgeDfXsHhJ9+anj5D0e0z63lXZXCXC6/3N6WXgUDw0mjGZEsKvQW8WQq0=
+  - TRAVIS_CARGO_NIGHTLY_FEATURE=''
+  - secure: Ocpy/2rRtRRuVyNjv6P5Hw2Cw9dCm/F9NPRovglMjDro2PjGiiNsSHx3yx9+fe3/e5K6gwket3MVBNOFe90uwerSFwxh+oU5qZnhd8v0Bzu/olJAxMj0a+m2bdgGmpfyiVKbEzSuTd1kBFAmQ1sF1cES+WPjQYxUyWoKhKuUDDM=
