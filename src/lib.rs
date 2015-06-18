@@ -86,7 +86,9 @@ impl Protection {
 /// A file-backed `Mmap` buffer may be used to read or write data to a file. Use `Mmap::open(..)` to
 /// create a file-backed memory map. An anonymous `Mmap` buffer may be used any place that an
 /// in-memory byte buffer is needed, and gives the added features of a memory map. Use
-/// `Mmap::anonymous(..)` to create an anonymous memory map.
+/// `Mmap::anonymous(..)` to create an anonymous memory map. A named `Mmap` buffer may be used
+/// wherever a memory map is needed between processes or just for easier referencing. Use
+/// `Mmap::named(..)` to create a named memory map.
 ///
 /// Changes written to a memory-mapped file are not guaranteed to be durable until the memory map is
 /// flushed, or it is dropped.
@@ -102,6 +104,14 @@ impl Protection {
 /// let mut anon_mmap = Mmap::anonymous(4096, Protection::ReadWrite).unwrap();
 /// (&mut *anon_mmap).write(b"foo").unwrap();
 /// assert_eq!(b"foo\0\0", &anon_mmap[0..5]);
+///
+/// let mut named_mmap1 = Mmap::named(4096, Protection::ReadWrite,
+///                                   "example_map".to_string(), true).unwrap();
+/// // Open a map with the same name
+/// let mut named_mmap2 = Mmap::named(4096, Protection::ReadWrite,
+///                                   "example_map".to_string(), false).unwrap();
+/// (&mut *named_mmap1).write(b"foo").unwrap(); // Write into first map
+/// assert_eq!(b"foo\0\0", &named_mmap2[0..5]); // Read from second map
 /// ```
 pub struct Mmap {
     inner: MmapInner
