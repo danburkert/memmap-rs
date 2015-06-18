@@ -1,6 +1,8 @@
 use std::{self, fs, io, ptr, slice};
 use std::ops::{Deref, DerefMut};
 use std::path::Path;
+use std::ffi::OsStr;
+use std::os::windows::ffi::OsStrExt;
 
 use kernel32;
 use libc;
@@ -32,6 +34,7 @@ pub struct MmapInner {
     file: Option<fs::File>,
     ptr: *mut libc::c_void,
     len: usize,
+    handle: Option<libc::HANDLE>,
 }
 
 impl MmapInner {
@@ -62,6 +65,7 @@ impl MmapInner {
                     file: Some(file),
                     ptr: ptr,
                     len: len as usize,
+                    handle: None,
                 })
             }
         }
@@ -88,9 +92,52 @@ impl MmapInner {
                     file: None,
                     ptr: ptr,
                     len: len as usize,
+                    handle: None,
                 })
             }
         }
+    }
+
+    /// Open an named memory map. If `exclusive` is true, this method will return an error if a map
+    /// with the same name already exists.
+    pub fn named(len: usize, prot: Protection, name: String, exclusive: bool) -> io::Result<MmapInner> {
+        unsafe {
+            let name = OsStr::new(&format!("Global\\{}", name)).encode_wide().chain(Some(0).into_iter())
+                                                               .collect::<Vec<_>>();
+
+            let mut handle = kernel32::CreateFileMappingW(libc::INVALID_HANDLE_VALUE,
+                                                          ptr::null_mut(),
+                                                          prot.as_mapping_flag(),
+                                                          (len >> 16 >> 16) as libc::DWORD,
+                                                          (len & 0xffffffff) as libc::DWORD,
+                                                          name.as_ptr());
+            if handle == ptr::null_mut() {
+                let err = io::Error::last_os_error();
+
+                if !exclusive && err.raw_os_error().unwrap() == libc::ERROR_ALREADY_EXISTS {
+                    handle = kernel32::OpenFileMappingW(prot.as_view_flag(), libc::TRUE, name.as_ptr());
+
+                    if handle == ptr::null_mut() {
+                        return Err(io::Error::last_os_error())
+                    }
+                } else {
+                    return Err(err);
+                }
+            }
+            let ptr = kernel32::MapViewOfFile(handle, prot.as_view_flag(), 0, 0, len as libc::SIZE_T);
+
+            if ptr == ptr::null_mut() {
+                Err(io::Error::last_os_error())
+            } else {
+                Ok(MmapInner {
+                    file: None,
+                    ptr: ptr,
+                    len: len as usize,
+                    handle: Some(handle),
+                })
+            }
+        }
+
     }
 
     pub fn flush(&mut self) -> io::Result<()> {
@@ -117,6 +164,11 @@ impl Drop for MmapInner {
         unsafe {
             assert!(kernel32::UnmapViewOfFile(self.ptr) != 0,
                     "unable to unmap mmap: {}", io::Error::last_os_error());
+
+            if let Some(handle) = self.handle {
+                assert!(kernel32::CloseHandle(handle) != 0,
+                        "unable to close file handle: {}", io::Error::last_os_error());
+            }
         }
     }
 }

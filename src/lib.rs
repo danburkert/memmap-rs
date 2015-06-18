@@ -119,6 +119,16 @@ impl Mmap {
         MmapInner::anonymous(len, prot).map(|inner| Mmap { inner: inner })
     }
 
+    /// Open an named memory map.
+    ///
+    /// If `exclusive` is true, this method will return an error if a map with the same name
+    /// already exists. Due to platform specific reasons, all forward and backward slashes are also
+    /// removed from the given name.
+    pub fn named(len: usize, prot: Protection, name: String, exclusive: bool) -> io::Result<Mmap> {
+        let name = name.replace("/", "").replace("\\", "");
+        MmapInner::named(len, prot, name, exclusive).map(|inner| Mmap { inner: inner })
+    }
+
     /// Flushes outstanding memory map modifications to disk.
     ///
     /// When this returns with a non-error result, all outstanding changes to a file-backed memory
@@ -379,5 +389,63 @@ mod test {
         let mmap2 = Mmap::open(&path, Protection::Read).unwrap();
         (&*mmap2).read(&mut read).unwrap();
         assert_eq!(nulls, &read);
+    }
+
+    #[test]
+    fn map_named() {
+        let expected_len = 128;
+        let mut mmap = Mmap::named(expected_len, Protection::ReadWrite,
+                                   "map_named_test".to_string(), false).unwrap();
+        let len = mmap.len();
+        assert_eq!(expected_len, len);
+
+        let zeros = iter::repeat(0).take(len).collect::<Vec<_>>();
+        let incr = (0..len).map(|n| n as u8).collect::<Vec<_>>();
+
+        // check that the mmap is empty
+        assert_eq!(&zeros[..], &*mmap);
+
+        // write values into the mmap
+        mmap.as_mut().write_all(&incr[..]).unwrap();
+
+        // read values back
+        assert_eq!(&incr[..], &*mmap);
+    }
+
+    #[test]
+    fn map_named_reopen() {
+        let expected_len = 128;
+
+        // Make a map for the purposes of this test.
+        let make_map = || -> Mmap {
+            Mmap::named(expected_len, Protection::ReadWrite,
+                        "map_named_reopen_test".to_string(), false).unwrap()
+        };
+
+        // create 2 maps with the same name. They should point to the same memory.
+        let (mut mmap1, mmap2) = (make_map(), make_map());
+
+        let len = mmap1.len();
+        assert_eq!(expected_len, len);
+        assert_eq!(expected_len, mmap2.len());
+
+        let zeros = iter::repeat(0).take(len).collect::<Vec<_>>();
+        let incr = (0..len).map(|n| n as u8).collect::<Vec<_>>();
+
+        // check that the mmaps are empty
+        assert_eq!(&zeros[..], &*mmap1);
+        assert_eq!(&zeros[..], &*mmap2);
+
+        // write values into mmap1
+        mmap1.as_mut().write_all(&incr[..]).unwrap();
+
+        // read values back from both mmap1 and mmap2
+        assert_eq!(&incr[..], &*mmap1);
+        assert_eq!(&incr[..], &*mmap2);
+
+        // create a third map to check that the values remain
+        let mmap3 = make_map();
+
+        assert_eq!(&incr[..], &*mmap3);
     }
 }

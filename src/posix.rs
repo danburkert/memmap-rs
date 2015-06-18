@@ -1,6 +1,7 @@
 use std::{self, io, ptr, slice};
 use std::ops::{Deref, DerefMut};
 use std::path::Path;
+use std::ffi::CString;
 
 use libc;
 
@@ -24,11 +25,20 @@ impl Protection {
             Protection::ReadCopy => libc::MAP_PRIVATE,
         }
     }
+
+    fn as_mode(self) -> libc::mode_t {
+        match self {
+            Protection::Read => 0o400,
+            Protection::ReadWrite => 0o600,
+            Protection::ReadCopy => 0o600,
+        }
+    }
 }
 
 pub struct MmapInner {
     ptr: *mut libc::c_void,
     len: usize,
+    shm: Option<(libc::c_int, String)>,
 }
 
 impl MmapInner {
@@ -53,6 +63,7 @@ impl MmapInner {
             Ok(MmapInner {
                 ptr: ptr,
                 len: len as usize,
+                shm: None,
             })
         }
     }
@@ -74,6 +85,52 @@ impl MmapInner {
             Ok(MmapInner {
                 ptr: ptr,
                 len: len as usize,
+                shm: None,
+            })
+        }
+    }
+
+    /// Open an named memory map.
+    ///
+    /// If `exclusive` is true, this method will return an error if a map with the same name
+    /// already exists. The specified name must not contain any forward or backwards slashes.
+    pub fn named(len: usize, prot: Protection, name: String, exclusive: bool) -> io::Result<MmapInner> {
+        // Adds a forward slash to work with shm_open in POSIX systems.
+        let name = format!("/{}", name);
+
+        // Create a shared memory object. By default this will create a new object if the specified
+        // name does not already exist.
+        let fd = unsafe {
+            libc::shm_open(CString::new(name.clone()).unwrap().as_ptr(),
+                           libc::O_CREAT
+                           | if let Protection::Read = prot { libc::O_RDONLY } else { libc::O_RDWR }
+                           | if exclusive { libc::O_EXCL } else { 0 },
+                           prot.as_mode())
+        };
+
+        if fd == -1 {
+            return Err(io::Error::last_os_error());
+        }
+
+        // Truncate shared memory object to specified size.
+        unsafe { libc::ftruncate(fd, len as libc::off_t) };
+
+        let ptr = unsafe {
+            libc::mmap(ptr::null_mut(),
+                       len as libc::size_t,
+                       prot.as_prot(),
+                       prot.as_flag(),
+                       fd,
+                       0)
+        };
+
+        if ptr == libc::MAP_FAILED {
+            Err(io::Error::last_os_error())
+        } else {
+            Ok(MmapInner {
+                ptr: ptr,
+                len: len as usize,
+                shm: Some((fd, name)),
             })
         }
     }
@@ -107,6 +164,23 @@ impl Drop for MmapInner {
         unsafe {
             assert!(libc::munmap(self.ptr, self.len as libc::size_t) == 0,
                     "unable to unmap mmap: {}", io::Error::last_os_error());
+
+            // If there is an attached shared memory object,
+            if let Some(ref shm) = self.shm {
+                // Close the file descriptor and
+                assert!(libc::close(shm.0) == 0, "unable to close shm fd: {}",
+                        io::Error::last_os_error());
+
+                // Unlink the shared memory object.
+                let unlink = libc::shm_unlink(CString::new(shm.1.clone()).unwrap().as_ptr()) == 0;
+                let enoent = io::Error::last_os_error().raw_os_error().unwrap() == libc::ENOENT;
+
+                // Asserts that either the unlink was successful or there was no object with the
+                // associated name, meaning a matching named Mmap was destroyed earlier.
+                assert!(unlink || enoent,
+                        "unable to unlink shm object: {}",
+                        io::Error::last_os_error());
+            }
         }
     }
 }
