@@ -86,7 +86,9 @@ impl Protection {
 /// A file-backed `Mmap` buffer may be used to read or write data to a file. Use `Mmap::open(..)` to
 /// create a file-backed memory map. An anonymous `Mmap` buffer may be used any place that an
 /// in-memory byte buffer is needed, and gives the added features of a memory map. Use
-/// `Mmap::anonymous(..)` to create an anonymous memory map.
+/// `Mmap::anonymous(..)` to create an anonymous memory map. A named `Mmap` buffer may be used
+/// wherever a memory map is needed between processes or just for easier referencing. Use
+/// `Mmap::named(..)` to create a named memory map.
 ///
 /// Changes written to a memory-mapped file are not guaranteed to be durable until the memory map is
 /// flushed, or it is dropped.
@@ -102,6 +104,14 @@ impl Protection {
 /// let mut anon_mmap = Mmap::anonymous(4096, Protection::ReadWrite).unwrap();
 /// (&mut *anon_mmap).write(b"foo").unwrap();
 /// assert_eq!(b"foo\0\0", &anon_mmap[0..5]);
+///
+/// let mut named_mmap1 = Mmap::named(4096, Protection::ReadWrite,
+///                                   "example_map".to_string(), true).unwrap();
+/// // Open a map with the same name
+/// let mut named_mmap2 = Mmap::named(4096, Protection::ReadWrite,
+///                                   "example_map".to_string(), false).unwrap();
+/// (&mut *named_mmap1).write(b"foo").unwrap(); // Write into first map
+/// assert_eq!(b"foo\0\0", &named_mmap2[0..5]); // Read from second map
 /// ```
 pub struct Mmap {
     inner: MmapInner
@@ -117,6 +127,16 @@ impl Mmap {
     /// Opens an anonymous memory map.
     pub fn anonymous(len: usize, prot: Protection) -> io::Result<Mmap> {
         MmapInner::anonymous(len, prot).map(|inner| Mmap { inner: inner })
+    }
+
+    /// Open an named memory map.
+    ///
+    /// If `exclusive` is true, this method will return an error if a map with the same name
+    /// already exists. Due to platform specific reasons, all forward and backward slashes are also
+    /// removed from the given name.
+    pub fn named(len: usize, prot: Protection, name: String, exclusive: bool) -> io::Result<Mmap> {
+        let name = name.replace("/", "").replace("\\", "");
+        MmapInner::named(len, prot, name, exclusive).map(|inner| Mmap { inner: inner })
     }
 
     /// Flushes outstanding memory map modifications to disk.
@@ -379,5 +399,63 @@ mod test {
         let mmap2 = Mmap::open(&path, Protection::Read).unwrap();
         (&*mmap2).read(&mut read).unwrap();
         assert_eq!(nulls, &read);
+    }
+
+    #[test]
+    fn map_named() {
+        let expected_len = 128;
+        let mut mmap = Mmap::named(expected_len, Protection::ReadWrite,
+                                   "map_named_test".to_string(), false).unwrap();
+        let len = mmap.len();
+        assert_eq!(expected_len, len);
+
+        let zeros = iter::repeat(0).take(len).collect::<Vec<_>>();
+        let incr = (0..len).map(|n| n as u8).collect::<Vec<_>>();
+
+        // check that the mmap is empty
+        assert_eq!(&zeros[..], &*mmap);
+
+        // write values into the mmap
+        mmap.as_mut().write_all(&incr[..]).unwrap();
+
+        // read values back
+        assert_eq!(&incr[..], &*mmap);
+    }
+
+    #[test]
+    fn map_named_reopen() {
+        let expected_len = 128;
+
+        // Make a map for the purposes of this test.
+        let make_map = || -> Mmap {
+            Mmap::named(expected_len, Protection::ReadWrite,
+                        "map_named_reopen_test".to_string(), false).unwrap()
+        };
+
+        // create 2 maps with the same name. They should point to the same memory.
+        let (mut mmap1, mmap2) = (make_map(), make_map());
+
+        let len = mmap1.len();
+        assert_eq!(expected_len, len);
+        assert_eq!(expected_len, mmap2.len());
+
+        let zeros = iter::repeat(0).take(len).collect::<Vec<_>>();
+        let incr = (0..len).map(|n| n as u8).collect::<Vec<_>>();
+
+        // check that the mmaps are empty
+        assert_eq!(&zeros[..], &*mmap1);
+        assert_eq!(&zeros[..], &*mmap2);
+
+        // write values into mmap1
+        mmap1.as_mut().write_all(&incr[..]).unwrap();
+
+        // read values back from both mmap1 and mmap2
+        assert_eq!(&incr[..], &*mmap1);
+        assert_eq!(&incr[..], &*mmap2);
+
+        // create a third map to check that the values remain
+        let mmap3 = make_map();
+
+        assert_eq!(&incr[..], &*mmap3);
     }
 }
