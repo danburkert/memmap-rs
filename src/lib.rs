@@ -185,13 +185,13 @@ impl Index<usize> for Mmap {
     type Output = u8;
 
     fn index(&self, index: usize) -> &u8 {
-        &(*self)[index]
+        &(*self.inner)[index]
     }
 }
 
 impl IndexMut<usize> for Mmap {
     fn index_mut(&mut self, index: usize) -> &mut u8 {
-        &mut (*self)[index]
+        &mut (*self.inner)[index]
     }
 }
 
@@ -379,5 +379,12 @@ mod test {
         let mmap2 = Mmap::open(&path, Protection::Read).unwrap();
         (&*mmap2).read(&mut read).unwrap();
         assert_eq!(nulls, &read);
+    }
+
+    #[test]
+    fn index() {
+        let mut mmap = Mmap::anonymous(128, Protection::ReadWrite).unwrap();
+        mmap[0] = 42;
+        assert_eq!(42, mmap[0]);
     }
 }
