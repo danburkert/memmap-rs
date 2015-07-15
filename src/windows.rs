@@ -1,6 +1,7 @@
 use std::{self, fs, io, ptr, slice};
 use std::ops::{Deref, DerefMut};
 use std::path::Path;
+use std::os::raw::c_void;
 
 use kernel32;
 use libc;
@@ -30,7 +31,7 @@ impl Protection {
 
 pub struct MmapInner {
     file: Option<fs::File>,
-    ptr: *mut libc::c_void,
+    ptr: *mut c_void,
     len: usize,
 }
 
@@ -42,7 +43,7 @@ impl MmapInner {
         let len = try!(file.metadata()).len();
 
         unsafe {
-            let handle = libc::CreateFileMappingW(std::os::windows::io::AsRawHandle::as_raw_handle(&file) as *mut libc::c_void,
+            let handle = libc::CreateFileMappingW(std::os::windows::io::AsRawHandle::as_raw_handle(&file) as *mut c_void,
                                                   ptr::null_mut(),
                                                   prot.as_mapping_flag(),
                                                   0,
