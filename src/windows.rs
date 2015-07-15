@@ -1,30 +1,30 @@
 use std::{self, fs, io, ptr, slice};
 use std::ops::{Deref, DerefMut};
-use std::path::Path;
 use std::os::raw::c_void;
+use std::os::windows::io::AsRawHandle;
+use std::path::Path;
 
 use kernel32;
-use libc;
 
 use ::Protection;
 
 impl Protection {
 
     /// Returns the `Protection` as a flag appropriate for a call to `CreateFileMapping`.
-    fn as_mapping_flag(self) -> libc::DWORD {
+    fn as_mapping_flag(self) -> kernel32::DWORD {
         match self {
-            Protection::Read => libc::PAGE_READONLY,
-            Protection::ReadWrite => libc::PAGE_READWRITE,
-            Protection::ReadCopy => libc::PAGE_READONLY,
+            Protection::Read => kernel32::PAGE_READONLY,
+            Protection::ReadWrite => kernel32::PAGE_READWRITE,
+            Protection::ReadCopy => kernel32::PAGE_READONLY,
         }
     }
 
     /// Returns the `Protection` as a flag appropriate for a call to `MapViewOfFile`.
-    fn as_view_flag(self) -> libc::DWORD {
+    fn as_view_flag(self) -> kernel32::DWORD {
         match self {
-            Protection::Read => libc::FILE_MAP_READ,
-            Protection::ReadWrite => libc::FILE_MAP_ALL_ACCESS,
-            Protection::ReadCopy => libc::FILE_MAP_COPY,
+            Protection::Read => kernel32::FILE_MAP_READ,
+            Protection::ReadWrite => kernel32::FILE_MAP_ALL_ACCESS,
+            Protection::ReadCopy => kernel32::FILE_MAP_COPY,
         }
     }
 }
@@ -43,18 +43,18 @@ impl MmapInner {
         let len = try!(file.metadata()).len();
 
         unsafe {
-            let handle = libc::CreateFileMappingW(std::os::windows::io::AsRawHandle::as_raw_handle(&file) as *mut c_void,
-                                                  ptr::null_mut(),
-                                                  prot.as_mapping_flag(),
-                                                  0,
-                                                  0,
-                                                  ptr::null());
+            let handle = kernel32::CreateFileMappingW(AsRawHandle::as_raw_handle(&file) as *mut c_void,
+                                                      ptr::null_mut(),
+                                                      prot.as_mapping_flag(),
+                                                      0,
+                                                      0,
+                                                      ptr::null());
             if handle == ptr::null_mut() {
                 return Err(io::Error::last_os_error());
             }
 
-            let ptr = libc::MapViewOfFile(handle, prot.as_view_flag(), 0, 0, len as libc::SIZE_T);
-            libc::CloseHandle(handle);
+            let ptr = kernel32::MapViewOfFile(handle, prot.as_view_flag(), 0, 0, len as kernel32::SIZE_T);
+            kernel32::CloseHandle(handle);
 
             if ptr == ptr::null_mut() {
                 Err(io::Error::last_os_error())
@@ -70,16 +70,16 @@ impl MmapInner {
 
     pub fn anonymous(len: usize, prot: Protection) -> io::Result<MmapInner> {
         unsafe {
-            let handle = kernel32::CreateFileMappingW(libc::INVALID_HANDLE_VALUE,
+            let handle = kernel32::CreateFileMappingW(kernel32::INVALID_HANDLE_VALUE,
                                                       ptr::null_mut(),
                                                       prot.as_mapping_flag(),
-                                                      (len >> 16 >> 16) as libc::DWORD,
-                                                      (len & 0xffffffff) as libc::DWORD,
+                                                      (len >> 16 >> 16) as kernel32::DWORD,
+                                                      (len & 0xffffffff) as kernel32::DWORD,
                                                       ptr::null());
             if handle == ptr::null_mut() {
                 return Err(io::Error::last_os_error());
             }
-            let ptr = kernel32::MapViewOfFile(handle, prot.as_view_flag(), 0, 0, len as libc::SIZE_T);
+            let ptr = kernel32::MapViewOfFile(handle, prot.as_view_flag(), 0, 0, len as kernel32::SIZE_T);
             kernel32::CloseHandle(handle);
 
             if ptr == ptr::null_mut() {

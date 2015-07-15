@@ -2,6 +2,15 @@
 
 #[macro_use]
 extern crate bitflags;
+
+#[cfg(any(target_os = "linux",
+          target_os = "android",
+          target_os = "macos",
+          target_os = "ios",
+          target_os = "freebsd",
+          target_os = "dragonfly",
+          target_os = "bitrig",
+          target_os = "openbsd"))]
 extern crate libc;
 
 #[cfg(target_os = "windows")]
