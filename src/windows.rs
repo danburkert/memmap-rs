@@ -1,30 +1,31 @@
+extern crate kernel32;
+extern crate winapi;
+
 use std::{self, fs, io, ptr, slice};
 use std::ops::{Deref, DerefMut};
 use std::os::raw::c_void;
 use std::os::windows::io::AsRawHandle;
 use std::path::Path;
 
-use kernel32;
-
 use ::Protection;
 
 impl Protection {
 
     /// Returns the `Protection` as a flag appropriate for a call to `CreateFileMapping`.
-    fn as_mapping_flag(self) -> kernel32::DWORD {
+    fn as_mapping_flag(self) -> winapi::DWORD {
         match self {
-            Protection::Read => kernel32::PAGE_READONLY,
-            Protection::ReadWrite => kernel32::PAGE_READWRITE,
-            Protection::ReadCopy => kernel32::PAGE_READONLY,
+            Protection::Read => winapi::PAGE_READONLY,
+            Protection::ReadWrite => winapi::PAGE_READWRITE,
+            Protection::ReadCopy => winapi::PAGE_READONLY,
         }
     }
 
     /// Returns the `Protection` as a flag appropriate for a call to `MapViewOfFile`.
-    fn as_view_flag(self) -> kernel32::DWORD {
+    fn as_view_flag(self) -> winapi::DWORD {
         match self {
-            Protection::Read => kernel32::FILE_MAP_READ,
-            Protection::ReadWrite => kernel32::FILE_MAP_ALL_ACCESS,
-            Protection::ReadCopy => kernel32::FILE_MAP_COPY,
+            Protection::Read => winapi::FILE_MAP_READ,
+            Protection::ReadWrite => winapi::FILE_MAP_ALL_ACCESS,
+            Protection::ReadCopy => winapi::FILE_MAP_COPY,
         }
     }
 }
@@ -53,7 +54,7 @@ impl MmapInner {
                 return Err(io::Error::last_os_error());
             }
 
-            let ptr = kernel32::MapViewOfFile(handle, prot.as_view_flag(), 0, 0, len as kernel32::SIZE_T);
+            let ptr = kernel32::MapViewOfFile(handle, prot.as_view_flag(), 0, 0, len as winapi::SIZE_T);
             kernel32::CloseHandle(handle);
 
             if ptr == ptr::null_mut() {
@@ -70,16 +71,16 @@ impl MmapInner {
 
     pub fn anonymous(len: usize, prot: Protection) -> io::Result<MmapInner> {
         unsafe {
-            let handle = kernel32::CreateFileMappingW(kernel32::INVALID_HANDLE_VALUE,
+            let handle = kernel32::CreateFileMappingW(winapi::INVALID_HANDLE_VALUE,
                                                       ptr::null_mut(),
                                                       prot.as_mapping_flag(),
-                                                      (len >> 16 >> 16) as kernel32::DWORD,
-                                                      (len & 0xffffffff) as kernel32::DWORD,
+                                                      (len >> 16 >> 16) as winapi::DWORD,
+                                                      (len & 0xffffffff) as winapi::DWORD,
                                                       ptr::null());
             if handle == ptr::null_mut() {
                 return Err(io::Error::last_os_error());
             }
-            let ptr = kernel32::MapViewOfFile(handle, prot.as_view_flag(), 0, 0, len as kernel32::SIZE_T);
+            let ptr = kernel32::MapViewOfFile(handle, prot.as_view_flag(), 0, 0, len as winapi::SIZE_T);
             kernel32::CloseHandle(handle);
 
             if ptr == ptr::null_mut() {

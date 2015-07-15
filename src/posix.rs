@@ -1,8 +1,8 @@
+extern crate libc;
+
 use std::{self, io, ptr, slice};
 use std::ops::{Deref, DerefMut};
 use std::path::Path;
-
-use libc;
 
 use ::Protection;
 
