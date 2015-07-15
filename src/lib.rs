@@ -8,23 +8,9 @@ mod windows;
 #[cfg(target_os = "windows")]
 use windows::MmapInner;
 
-#[cfg(any(target_os = "linux",
-          target_os = "android",
-          target_os = "macos",
-          target_os = "ios",
-          target_os = "freebsd",
-          target_os = "dragonfly",
-          target_os = "bitrig",
-          target_os = "openbsd"))]
+#[cfg(not(target_os = "windows"))]
 mod posix;
-#[cfg(any(target_os = "linux",
-          target_os = "android",
-          target_os = "macos",
-          target_os = "ios",
-          target_os = "freebsd",
-          target_os = "dragonfly",
-          target_os = "bitrig",
-          target_os = "openbsd"))]
+#[cfg(not(target_os = "windows"))]
 use posix::MmapInner;
 
 use std::{fs, io};
