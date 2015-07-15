@@ -5,8 +5,9 @@ authors = ["Dan Burkert <dan@danburkert.com>"]
 
 [dependencies]
 bitflags = "*"
-libc = "*"
 kernel32-sys = "*"
+libc = "*"
+winapi = "*"
 
 [dev-dependencies]
 tempdir = "*"
