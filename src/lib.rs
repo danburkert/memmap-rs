@@ -257,6 +257,7 @@ mod test {
 
     use std::{fs, iter};
     use std::io::{Read, Write};
+    use std::thread;
 
     use super::*;
 
@@ -386,5 +387,14 @@ mod test {
         let mut mmap = Mmap::anonymous(128, Protection::ReadWrite).unwrap();
         mmap[0] = 42;
         assert_eq!(42, mmap[0]);
+    }
+
+    #[test]
+    fn send() {
+        let mut mmap = Mmap::anonymous(128, Protection::ReadWrite).unwrap();
+        (&mut mmap[..]).write(b"foobar").unwrap();
+        thread::spawn(move || {
+            mmap.flush().unwrap();
+        });
     }
 }

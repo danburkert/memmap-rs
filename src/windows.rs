@@ -121,6 +121,8 @@ impl Drop for MmapInner {
     }
 }
 
+unsafe impl Send for MmapInner { }
+
 impl Deref for MmapInner {
     type Target = [u8];
 

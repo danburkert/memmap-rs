@@ -94,7 +94,6 @@ impl MmapInner {
         } else {
             Err(io::Error::last_os_error())
         }
-
     }
 
     pub fn len(&self) -> usize {
@@ -110,6 +109,8 @@ impl Drop for MmapInner {
         }
     }
 }
+
+unsafe impl Send for MmapInner { }
 
 impl Deref for MmapInner {
     type Target = [u8];
