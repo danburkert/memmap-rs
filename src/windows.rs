@@ -1,7 +1,7 @@
 extern crate kernel32;
 extern crate winapi;
 
-use std::{self, fs, io, ptr, slice};
+use std::{fs, io, ptr, slice};
 use std::ops::{Deref, DerefMut};
 use std::os::raw::c_void;
 use std::os::windows::io::AsRawHandle;
