@@ -12,5 +12,5 @@ fn main() {
 
     let mmap = Mmap::open(path, Protection::Read).unwrap();
 
-    io::stdout().write_all(&mmap[..]).unwrap();
+    io::stdout().write_all(unsafe { mmap.as_slice() }).unwrap();
 }

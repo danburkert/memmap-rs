@@ -1,5 +1,7 @@
 //! A cross-platform Rust API for memory-mapped file IO.
 
+#![deny(warnings)]
+
 #[macro_use]
 extern crate bitflags;
 
@@ -13,16 +15,8 @@ mod posix;
 #[cfg(not(target_os = "windows"))]
 use posix::MmapInner;
 
-use std::{fs, io};
-use std::borrow::{Borrow, BorrowMut};
-use std::ops::{
-    Deref, DerefMut,
-    Index, IndexMut,
-    Range, RangeFrom, RangeTo, RangeFull,
-};
+use std::{fs, io, slice};
 use std::path::Path;
-
-use Protection::*;
 
 /// Memory map protection.
 ///
@@ -57,7 +51,7 @@ impl Protection {
     /// Returns `true` if the `Protection` is writable.
     pub fn write(self) -> bool {
         match self {
-            ReadWrite | ReadCopy => true,
+            Protection::ReadWrite | Protection::ReadCopy => true,
             _ => false,
         }
     }
@@ -78,12 +72,12 @@ impl Protection {
 /// use mmap::{Mmap, Protection};
 ///
 /// let file_mmap = Mmap::open("README.md", Protection::Read).unwrap();
-/// let bytes: &[u8] = &*file_mmap;
-/// assert_eq!(b"# mmap", &file_mmap[0..6]);
+/// let bytes: &[u8] = unsafe { file_mmap.as_slice() };
+/// assert_eq!(b"# mmap", unsafe { &file_mmap.as_slice()[0..6] });
 ///
 /// let mut anon_mmap = Mmap::anonymous(4096, Protection::ReadWrite).unwrap();
-/// (&mut *anon_mmap).write(b"foo").unwrap();
-/// assert_eq!(b"foo\0\0", &anon_mmap[0..5]);
+/// unsafe { anon_mmap.as_mut_slice() }.write(b"foo").unwrap();
+/// assert_eq!(b"foo\0\0", unsafe { &anon_mmap.as_slice()[0..5] });
 /// ```
 pub struct Mmap {
     inner: MmapInner
@@ -123,113 +117,37 @@ impl Mmap {
     pub fn len(&self) -> usize {
         self.inner.len()
     }
-}
 
-impl Deref for Mmap {
-    type Target = [u8];
-
-    fn deref(&self) -> &[u8] {
-        &*self.inner
+    /// Returns a pointer to the memory mapped file.
+    ///
+    /// See `Mmap::as_slice` for invariants that must hold when dereferencing the pointer.
+    pub fn ptr(&self) -> *const u8 {
+        self.inner.ptr()
     }
-}
 
-impl DerefMut for Mmap {
-    fn deref_mut(&mut self) -> &mut [u8] {
-        &mut *self.inner
+    /// Returns a pointer to the memory mapped file.
+    ///
+    /// See `Mmap::as_mut_slice` for invariants that must hold when dereferencing the pointer.
+    pub fn mut_ptr(&mut self) -> *mut u8 {
+        self.inner.mut_ptr()
     }
-}
 
-impl AsRef<[u8]> for Mmap {
-    fn as_ref(&self) -> &[u8] {
-        &*self
+    /// Returns the memory mapped file as an immutable slice.
+    ///
+    /// ## Unsafety
+    ///
+    /// The caller must ensure that the file is not concurrently modified.
+    pub unsafe fn as_slice(&self) -> &[u8] {
+        slice::from_raw_parts(self.ptr(), self.len())
     }
-}
 
-impl AsMut<[u8]> for Mmap {
-    fn as_mut(&mut self) -> &mut [u8] {
-        &mut *self
-    }
-}
-
-impl Borrow<[u8]> for Mmap {
-    fn borrow(&self) -> &[u8] {
-        &*self
-    }
-}
-
-impl BorrowMut<[u8]> for Mmap {
-    fn borrow_mut(&mut self) -> &mut [u8] {
-        &mut *self
-    }
-}
-
-impl Index<usize> for Mmap {
-    type Output = u8;
-
-    fn index(&self, index: usize) -> &u8 {
-        &(*self.inner)[index]
-    }
-}
-
-impl IndexMut<usize> for Mmap {
-    fn index_mut(&mut self, index: usize) -> &mut u8 {
-        &mut (*self.inner)[index]
-    }
-}
-
-impl Index<Range<usize>> for Mmap {
-    type Output = [u8];
-
-    fn index(&self, index: Range<usize>) -> &[u8] {
-        Index::index(&**self, index)
-    }
-}
-
-impl Index<RangeTo<usize>> for Mmap {
-    type Output = [u8];
-
-    fn index(&self, index: RangeTo<usize>) -> &[u8] {
-        Index::index(&**self, index)
-    }
-}
-
-impl Index<RangeFrom<usize>> for Mmap {
-    type Output = [u8];
-
-    fn index(&self, index: RangeFrom<usize>) -> &[u8] {
-        Index::index(&**self, index)
-    }
-}
-
-impl Index<RangeFull> for Mmap {
-    type Output = [u8];
-
-    fn index(&self, _index: RangeFull) -> &[u8] {
-        self
-    }
-}
-
-impl IndexMut<Range<usize>> for Mmap {
-    fn index_mut(&mut self, index: Range<usize>) -> &mut [u8] {
-        IndexMut::index_mut(&mut **self, index)
-    }
-}
-
-impl IndexMut<RangeTo<usize>> for Mmap {
-    fn index_mut(&mut self, index: RangeTo<usize>) -> &mut [u8] {
-        IndexMut::index_mut(&mut **self, index)
-    }
-}
-
-impl IndexMut<RangeFrom<usize>> for Mmap {
-    fn index_mut(&mut self, index: RangeFrom<usize>) -> &mut [u8] {
-        IndexMut::index_mut(&mut **self, index)
-    }
-}
-
-impl IndexMut<RangeFull> for Mmap {
-    fn index_mut(&mut self, _index: RangeFull) -> &mut [u8] {
-        self
+    /// Returns the memory mapped file as a mutable slice.
+    ///
+    /// ## Unsafety
+    ///
+    /// The caller must ensure that the file is not concurrently accessed.
+    pub unsafe fn as_mut_slice(&mut self) -> &mut [u8] {
+        slice::from_raw_parts_mut(self.mut_ptr(), self.len())
     }
 }
 
@@ -263,16 +181,16 @@ mod test {
         let incr = (0..len).map(|n| n as u8).collect::<Vec<_>>();
 
         // check that the mmap is empty
-        assert_eq!(&zeros[..], &*mmap);
+        assert_eq!(&zeros[..], unsafe { mmap.as_slice() });
 
         // write values into the mmap
-        mmap.as_mut().write_all(&incr[..]).unwrap();
+        unsafe { mmap.as_mut_slice() }.write_all(&incr[..]).unwrap();
 
         // read values back
-        assert_eq!(&incr[..], &*mmap);
+        assert_eq!(&incr[..], unsafe { mmap.as_slice() });
     }
 
-    // Check that a 0-length file will not be mapped
+    /// Checks that a 0-length file will not be mapped.
     #[test]
     fn map_empty_file() {
         let tempdir = tempdir::TempDir::new("mmap").unwrap();
@@ -286,7 +204,6 @@ mod test {
         assert!(Mmap::open(path, Protection::ReadWrite).is_err());
     }
 
-
     #[test]
     fn map_anon() {
         let expected_len = 128;
@@ -298,13 +215,13 @@ mod test {
         let incr = (0..len).map(|n| n as u8).collect::<Vec<_>>();
 
         // check that the mmap is empty
-        assert_eq!(&zeros[..], &*mmap);
+        assert_eq!(&zeros[..], unsafe { mmap.as_slice() });
 
         // write values into the mmap
-        mmap.as_mut().write_all(&incr[..]).unwrap();
+        unsafe { mmap.as_mut_slice() }.write_all(&incr[..]).unwrap();
 
         // read values back
-        assert_eq!(&incr[..], &*mmap);
+        assert_eq!(&incr[..], unsafe { mmap.as_slice() });
     }
 
     #[test]
@@ -323,7 +240,7 @@ mod test {
         let mut read = [0u8; 6];
 
         let mut mmap = Mmap::open(&path, Protection::ReadWrite).unwrap();
-        (&mut mmap[..]).write(write).unwrap();
+        unsafe { mmap.as_mut_slice() }.write(write).unwrap();
         mmap.flush().unwrap();
 
         file.read(&mut read).unwrap();
@@ -347,11 +264,11 @@ mod test {
         let mut read = [0u8; 6];
 
         let mut mmap = Mmap::open(&path, Protection::ReadCopy).unwrap();
-        (&mut mmap[..]).write(write).unwrap();
+        unsafe { mmap.as_mut_slice() }.write(write).unwrap();
         mmap.flush().unwrap();
 
         // The mmap contains the write
-        (&*mmap).read(&mut read).unwrap();
+        unsafe { mmap.as_slice() }.read(&mut read).unwrap();
         assert_eq!(write, &read);
 
         // The file does not contain the write
@@ -360,21 +277,21 @@ mod test {
 
         // another mmap does not contain the write
         let mmap2 = Mmap::open(&path, Protection::Read).unwrap();
-        (&*mmap2).read(&mut read).unwrap();
+        unsafe { mmap2.as_slice() }.read(&mut read).unwrap();
         assert_eq!(nulls, &read);
     }
 
     #[test]
     fn index() {
         let mut mmap = Mmap::anonymous(128, Protection::ReadWrite).unwrap();
-        mmap[0] = 42;
-        assert_eq!(42, mmap[0]);
+        unsafe { mmap.as_mut_slice()[0] = 42 };
+        assert_eq!(42, unsafe { mmap.as_slice()[0] });
     }
 
     #[test]
     fn send() {
         let mut mmap = Mmap::anonymous(128, Protection::ReadWrite).unwrap();
-        (&mut mmap[..]).write(b"foobar").unwrap();
+        unsafe { mmap.as_mut_slice() }.write(b"foobar").unwrap();
         thread::spawn(move || {
             mmap.flush().unwrap();
         });

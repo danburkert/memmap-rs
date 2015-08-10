@@ -1,8 +1,7 @@
 extern crate kernel32;
 extern crate winapi;
 
-use std::{fs, io, ptr, slice};
-use std::ops::{Deref, DerefMut};
+use std::{fs, io, ptr};
 use std::os::raw::c_void;
 use std::os::windows::io::AsRawHandle;
 use std::path::Path;
@@ -109,6 +108,14 @@ impl MmapInner {
         }
     }
 
+    pub fn ptr(&self) -> *const u8 {
+        self.ptr as *const u8
+    }
+
+    pub fn mut_ptr(&mut self) -> *mut u8 {
+        self.ptr as *mut u8
+    }
+
     pub fn len(&self) -> usize {
         self.len
     }
@@ -124,17 +131,3 @@ impl Drop for MmapInner {
 }
 
 unsafe impl Send for MmapInner { }
-
-impl Deref for MmapInner {
-    type Target = [u8];
-
-    fn deref(&self) -> &[u8] {
-        unsafe { slice::from_raw_parts(self.ptr as *const u8, self.len) }
-    }
-}
-
-impl DerefMut for MmapInner {
-    fn deref_mut(&mut self) -> &mut [u8] {
-        unsafe { slice::from_raw_parts_mut(self.ptr as *mut u8, self.len) }
-    }
-}
