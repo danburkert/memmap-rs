@@ -1,7 +1,7 @@
 extern crate libc;
 
 use std::{self, io, ptr};
-use std::path::Path;
+use std::fs::File;
 
 use ::Protection;
 
@@ -32,27 +32,27 @@ pub struct MmapInner {
 
 impl MmapInner {
 
-    /// Open a file-backed memory map.
-    pub fn open<P>(path: P, prot: Protection) -> io::Result<MmapInner> where P: AsRef<Path> {
-        let file = try!(prot.as_open_options().open(path));
-        let len = try!(file.metadata()).len();
+    pub fn open(file: File, prot: Protection, offset: usize, len: usize) -> io::Result<MmapInner> {
+        let alignment = offset % page_size();
+        let aligned_offset = offset - alignment;
+        let aligned_len = len + alignment;
 
-        let ptr = unsafe {
-            libc::mmap(ptr::null_mut(),
-                       len as libc::size_t,
-                       prot.as_prot(),
-                       prot.as_flag(),
-                       std::os::unix::io::AsRawFd::as_raw_fd(&file),
-                       0)
-        };
+        unsafe {
+            let ptr = libc::mmap(ptr::null_mut(),
+                                 aligned_len as libc::size_t,
+                                 prot.as_prot(),
+                                 prot.as_flag(),
+                                 std::os::unix::io::AsRawFd::as_raw_fd(&file),
+                                 aligned_offset as libc::off_t);
 
-        if ptr == libc::MAP_FAILED {
-            Err(io::Error::last_os_error())
-        } else {
-            Ok(MmapInner {
-                ptr: ptr,
-                len: len as usize,
-            })
+            if ptr == libc::MAP_FAILED {
+                Err(io::Error::last_os_error())
+            } else {
+                Ok(MmapInner {
+                    ptr: ptr.offset(alignment as isize),
+                    len: len,
+                })
+            }
         }
     }
 
@@ -110,11 +110,20 @@ impl MmapInner {
 
 impl Drop for MmapInner {
     fn drop(&mut self) {
+        let alignment = self.ptr as usize % page_size();
         unsafe {
-            assert!(libc::munmap(self.ptr, self.len as libc::size_t) == 0,
+            assert!(libc::munmap(self.ptr.offset(0usize.wrapping_sub(alignment) as isize),
+                                 (self.len + alignment) as libc::size_t) == 0,
                     "unable to unmap mmap: {}", io::Error::last_os_error());
         }
     }
 }
 
+unsafe impl Sync for MmapInner { }
 unsafe impl Send for MmapInner { }
+
+fn page_size() -> usize {
+    unsafe {
+        libc::sysconf(libc::_SC_PAGESIZE) as usize
+    }
+}

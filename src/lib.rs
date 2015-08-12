@@ -5,17 +5,18 @@
 #[macro_use]
 extern crate bitflags;
 
-#[cfg(target_os = "windows")]
+#[cfg(windows)]
 mod windows;
-#[cfg(target_os = "windows")]
+#[cfg(windows)]
 use windows::MmapInner;
 
-#[cfg(not(target_os = "windows"))]
+#[cfg(unix)]
 mod posix;
-#[cfg(not(target_os = "windows"))]
+#[cfg(unix)]
 use posix::MmapInner;
 
-use std::{fs, io, slice};
+use std::{io, slice};
+use std::fs::{self, File};
 use std::path::Path;
 
 /// Memory map protection.
@@ -71,7 +72,7 @@ impl Protection {
 /// use std::io::Write;
 /// use mmap::{Mmap, Protection};
 ///
-/// let file_mmap = Mmap::open("README.md", Protection::Read).unwrap();
+/// let file_mmap = Mmap::open_path("README.md", Protection::Read).unwrap();
 /// let bytes: &[u8] = unsafe { file_mmap.as_slice() };
 /// assert_eq!(b"# mmap", unsafe { &file_mmap.as_slice()[0..6] });
 ///
@@ -86,11 +87,38 @@ pub struct Mmap {
 impl Mmap {
 
     /// Opens a file-backed memory map.
-    pub fn open<P>(path: P, prot: Protection) -> io::Result<Mmap> where P: AsRef<Path> {
-        MmapInner::open(path, prot).map(|inner| Mmap { inner: inner })
+    ///
+    /// The file must be opened with read permissions, and write permissions if the supplied
+    /// protection is `ReadWrite`. The file must not be empty.
+    pub fn open(file: File, prot: Protection) -> io::Result<Mmap> {
+        let len = try!(file.metadata()).len() as usize;
+        MmapInner::open(file, prot, 0, len).map(|inner| Mmap { inner: inner })
+    }
+
+    /// Opens a file-backed memory map.
+    ///
+    /// The file must not be empty.
+    pub fn open_path<P>(path: P, prot: Protection) -> io::Result<Mmap>
+    where P: AsRef<Path> {
+        let file = try!(prot.as_open_options().open(path));
+        let len = try!(file.metadata()).len() as usize;
+        MmapInner::open(file, prot, 0, len).map(|inner| Mmap { inner: inner })
+    }
+
+    /// Opens a file-backed memory map with the specified offset and length.
+    ///
+    /// The file must be opened with read permissions, and write permissions if the supplied
+    /// protection is `ReadWrite`. The file must not be empty. The length must be greater than zero.
+    pub fn open_with_offset(file: File,
+                            prot: Protection,
+                            offset: usize,
+                            len: usize) -> io::Result<Mmap> {
+        MmapInner::open(file, prot, offset, len).map(|inner| Mmap { inner: inner })
     }
 
     /// Opens an anonymous memory map.
+    ///
+    /// The length must be greater than zero.
     pub fn anonymous(len: usize, prot: Protection) -> io::Result<Mmap> {
         MmapInner::anonymous(len, prot).map(|inner| Mmap { inner: inner })
     }
@@ -158,6 +186,7 @@ mod test {
     use std::{fs, iter};
     use std::io::{Read, Write};
     use std::thread;
+    use std::sync::Arc;
 
     use super::*;
 
@@ -173,7 +202,7 @@ mod test {
                         .open(&path).unwrap()
                         .set_len(expected_len as u64).unwrap();
 
-        let mut mmap = Mmap::open(path, Protection::ReadWrite).unwrap();
+        let mut mmap = Mmap::open_path(path, Protection::ReadWrite).unwrap();
         let len = mmap.len();
         assert_eq!(expected_len, len);
 
@@ -201,7 +230,7 @@ mod test {
                         .create(true)
                         .open(&path).unwrap();
 
-        assert!(Mmap::open(path, Protection::ReadWrite).is_err());
+        assert!(Mmap::open_path(path, Protection::ReadWrite).is_err());
     }
 
     #[test]
@@ -239,7 +268,7 @@ mod test {
         let write = b"abc123";
         let mut read = [0u8; 6];
 
-        let mut mmap = Mmap::open(&path, Protection::ReadWrite).unwrap();
+        let mut mmap = Mmap::open_path(&path, Protection::ReadWrite).unwrap();
         unsafe { mmap.as_mut_slice() }.write(write).unwrap();
         mmap.flush().unwrap();
 
@@ -263,7 +292,7 @@ mod test {
         let write = b"abc123";
         let mut read = [0u8; 6];
 
-        let mut mmap = Mmap::open(&path, Protection::ReadCopy).unwrap();
+        let mut mmap = Mmap::open_path(&path, Protection::ReadCopy).unwrap();
         unsafe { mmap.as_mut_slice() }.write(write).unwrap();
         mmap.flush().unwrap();
 
@@ -276,9 +305,45 @@ mod test {
         assert_eq!(nulls, &read);
 
         // another mmap does not contain the write
-        let mmap2 = Mmap::open(&path, Protection::Read).unwrap();
+        let mmap2 = Mmap::open_path(&path, Protection::Read).unwrap();
         unsafe { mmap2.as_slice() }.read(&mut read).unwrap();
         assert_eq!(nulls, &read);
+    }
+
+    #[test]
+    fn map_offset() {
+        let tempdir = tempdir::TempDir::new("mmap").unwrap();
+        let path = tempdir.path().join("mmap");
+
+        let file = fs::OpenOptions::new()
+                                   .read(true)
+                                   .write(true)
+                                   .create(true)
+                                   .open(&path)
+                                   .unwrap();
+
+        file.set_len(500000 as u64).unwrap();
+
+        let offset = 5099;
+        let len = 50050;
+
+        let mut mmap = Mmap::open_with_offset(file,
+                                              Protection::ReadWrite,
+                                              offset,
+                                              len).unwrap();
+        assert_eq!(len, mmap.len());
+
+        let zeros = iter::repeat(0).take(len).collect::<Vec<_>>();
+        let incr = (0..len).map(|n| n as u8).collect::<Vec<_>>();
+
+        // check that the mmap is empty
+        assert_eq!(&zeros[..], unsafe { mmap.as_slice() });
+
+        // write values into the mmap
+        unsafe { mmap.as_mut_slice() }.write_all(&incr[..]).unwrap();
+
+        // read values back
+        assert_eq!(&incr[..], unsafe { mmap.as_slice() });
     }
 
     #[test]
@@ -289,11 +354,12 @@ mod test {
     }
 
     #[test]
-    fn send() {
-        let mut mmap = Mmap::anonymous(128, Protection::ReadWrite).unwrap();
-        unsafe { mmap.as_mut_slice() }.write(b"foobar").unwrap();
+    fn sync_send() {
+        let mmap = Arc::new(Mmap::anonymous(128, Protection::ReadWrite).unwrap());
         thread::spawn(move || {
-            mmap.flush().unwrap();
+            unsafe {
+                mmap.as_slice();
+            }
         });
     }
 }

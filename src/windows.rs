@@ -1,10 +1,10 @@
 extern crate kernel32;
 extern crate winapi;
 
-use std::{fs, io, ptr};
+use std::{io, mem, ptr};
+use std::fs::File;
 use std::os::raw::c_void;
 use std::os::windows::io::AsRawHandle;
-use std::path::Path;
 
 use ::Protection;
 
@@ -30,17 +30,17 @@ impl Protection {
 }
 
 pub struct MmapInner {
-    file: Option<fs::File>,
+    file: Option<File>,
     ptr: *mut c_void,
     len: usize,
 }
 
 impl MmapInner {
 
-    pub fn open<P>(path: P, prot: Protection) -> io::Result<MmapInner>
-    where P: AsRef<Path> {
-        let file = try!(prot.as_open_options().open(path));
-        let len = try!(file.metadata()).len();
+    pub fn open(file: File, prot: Protection, offset: usize, len: usize) -> io::Result<MmapInner> {
+        let alignment = offset % allocation_granularity();
+        let aligned_offset = offset - alignment;
+        let aligned_len = len + alignment;
 
         unsafe {
             let handle = kernel32::CreateFileMappingW(AsRawHandle::as_raw_handle(&file) as *mut c_void,
@@ -53,7 +53,11 @@ impl MmapInner {
                 return Err(io::Error::last_os_error());
             }
 
-            let ptr = kernel32::MapViewOfFile(handle, prot.as_view_flag(), 0, 0, len as winapi::SIZE_T);
+            let ptr = kernel32::MapViewOfFile(handle,
+                                              prot.as_view_flag(),
+                                              (aligned_offset >> 16 >> 16) as winapi::DWORD,
+                                              (aligned_offset & 0xffffffff) as winapi::DWORD,
+                                              aligned_len as winapi::SIZE_T);
             kernel32::CloseHandle(handle);
 
             if ptr == ptr::null_mut() {
@@ -61,7 +65,7 @@ impl MmapInner {
             } else {
                 Ok(MmapInner {
                     file: Some(file),
-                    ptr: ptr,
+                    ptr: ptr.offset(alignment as isize),
                     len: len as usize,
                 })
             }
@@ -123,11 +127,22 @@ impl MmapInner {
 
 impl Drop for MmapInner {
     fn drop(&mut self) {
+        let alignment = self.ptr as usize % allocation_granularity();
         unsafe {
-            assert!(kernel32::UnmapViewOfFile(self.ptr) != 0,
+            let ptr = self.ptr.offset(0usize.wrapping_sub(alignment) as isize);
+            assert!(kernel32::UnmapViewOfFile(ptr) != 0,
                     "unable to unmap mmap: {}", io::Error::last_os_error());
         }
     }
 }
 
+unsafe impl Sync for MmapInner { }
 unsafe impl Send for MmapInner { }
+
+fn allocation_granularity() -> usize {
+    unsafe {
+        let mut info = mem::zeroed();
+        kernel32::GetSystemInfo(&mut info);
+        return info.dwAllocationGranularity as usize;
+    }
+}
