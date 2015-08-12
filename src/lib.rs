@@ -18,6 +18,9 @@ use posix::MmapInner;
 use std::{fs, io, slice};
 use std::path::Path;
 
+mod mmap_sliver;
+use mmap_sliver::{ MmapSliver, carve };
+
 /// Memory map protection.
 ///
 /// Determines how a memory map may be used. If the memory map is backed by a file, then the file
