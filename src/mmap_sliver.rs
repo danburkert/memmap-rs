@@ -20,20 +20,20 @@ pub struct MmapSliver {
 	inner: MmapInner
 }
 
-pub unsafe fn carve(mmap: Mmap, _: Vec<(usize,usize)> ) -> Vec<MmapSliver> {
+pub unsafe fn carve(mmap: Mmap, ranges: Vec<(usize,usize)> ) -> Vec<MmapSliver> {
 	let parent = Rc::new( RefCell::new(mmap) );
 
 	let ptr = parent.borrow().ptr() as *mut libc::c_void;
-	let len = parent.borrow().len();
 
-
-	vec![ MmapSliver{
-		parent: parent,
-		inner: MmapInner {
-			ptr: ptr,
-			len: len
-		}
-	}]
+    ranges.into_iter().map(|(start_offset,end_offset)| {
+        MmapSliver {
+            parent: parent.clone(),
+            inner: MmapInner {
+                ptr: ptr.offset(start_offset as isize),
+                len: (end_offset-start_offset)
+            }
+        }
+    }).collect()
 }
 
 impl MmapSliver {
