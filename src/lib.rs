@@ -18,8 +18,7 @@ use posix::MmapInner;
 use std::{fs, io, slice};
 use std::path::Path;
 
-mod mmap_sliver;
-use mmap_sliver::{ MmapSliver, carve };
+pub mod mmap_sliver;
 
 /// Memory map protection.
 ///

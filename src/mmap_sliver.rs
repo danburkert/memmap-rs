@@ -1,6 +1,8 @@
-use std::{io, slice};
+use std::{ io, slice };
 use std::rc::Rc;
 use std::cell::RefCell;
+
+extern crate libc;
 
 use ::Mmap;
 
@@ -18,12 +20,11 @@ pub struct MmapSliver {
 	inner: MmapInner
 }
 
-pub unsafe fn carve(mmap: Mmap, carvings: Vec<(usize,usize)> ) -> Vec<MmapSliver> {
+pub unsafe fn carve(mmap: Mmap, _: Vec<(usize,usize)> ) -> Vec<MmapSliver> {
 	let parent = Rc::new( RefCell::new(mmap) );
 
-	let ptr = parent.borrow().ptr();
+	let ptr = parent.borrow().ptr() as *mut libc::c_void;
 	let len = parent.borrow().len();
-
 
 
 	vec![ MmapSliver{
@@ -40,9 +41,9 @@ impl MmapSliver {
         self.parent.borrow_mut().flush()
     }
 
-    pub fn flush_async(&mut self) -> io::Result<()> {
-        self.parent.borrow_mut().flush_async()
-    }
+    // pub fn flush_async(&mut self) -> io::Result<()> {
+    //     self.parent.borrow_mut().flush_async()
+    // }
 
     pub fn len(&self) -> usize {
         self.inner.len()
@@ -52,17 +53,17 @@ impl MmapSliver {
         self.inner.ptr()
     }
 
-    pub fn mut_ptr(&mut self) -> *mut u8 {
-        self.inner.mut_ptr()
-    }
+    // pub fn mut_ptr(&mut self) -> *mut u8 {
+    //     self.inner.mut_ptr()
+    // }
 
     pub unsafe fn as_slice(&self) -> &[u8] {
         slice::from_raw_parts(self.ptr(), self.len())
     }
 
-    pub unsafe fn as_mut_slice(&mut self) -> &mut [u8] {
-        slice::from_raw_parts_mut(self.mut_ptr(), self.len())
-    }
+    // pub unsafe fn as_mut_slice(&mut self) -> &mut [u8] {
+    //     slice::from_raw_parts_mut(self.mut_ptr(), self.len())
+    // }
 }
 
 #[cfg(test)]
@@ -73,11 +74,16 @@ mod test {
 	#[test]
 	fn carve_mmap(){
         let expected_len = 128;
-        let mut mmap = Mmap::anonymous(expected_len, Protection::ReadWrite).unwrap();
+        let mmap = Mmap::anonymous(expected_len, Protection::ReadWrite).unwrap();
 
 
-        carve(mmap, vec![(10,10)]);
+        let mut slivers = unsafe {
+            carve(mmap, vec![(10,10)])
+        };
 
-        assert_eq!(mmap.len(), 123);
+        assert_eq!(slivers.len(), 2);
+
+        let ref mut sliver = slivers[0];
+        sliver.flush().unwrap();
 	}
 }

@@ -26,8 +26,8 @@ impl Protection {
 }
 
 pub struct MmapInner {
-    ptr: *mut libc::c_void,
-    len: usize,
+    pub ptr: *mut libc::c_void,
+    pub len: usize,
 }
 
 impl MmapInner {
