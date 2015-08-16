@@ -11,9 +11,9 @@ mod windows;
 use windows::MmapInner;
 
 #[cfg(unix)]
-mod posix;
+mod unix;
 #[cfg(unix)]
-use posix::MmapInner;
+use unix::MmapInner;
 
 use std::{io, slice};
 use std::fs::{self, File};
