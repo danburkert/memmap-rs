@@ -15,11 +15,12 @@ mod posix;
 #[cfg(unix)]
 use posix::MmapInner;
 
-use std::{io, slice};
 use std::cell::UnsafeCell;
 use std::fs::{self, File};
+use std::io::{Error, ErrorKind, Result};
 use std::path::Path;
 use std::rc::Rc;
+use std::slice;
 use std::sync::Arc;
 
 /// Memory map protection.
@@ -93,7 +94,7 @@ impl Mmap {
     ///
     /// The file must be opened with read permissions, and write permissions if the supplied
     /// protection is `ReadWrite`. The file must not be empty.
-    pub fn open(file: File, prot: Protection) -> io::Result<Mmap> {
+    pub fn open(file: File, prot: Protection) -> Result<Mmap> {
         let len = try!(file.metadata()).len() as usize;
         MmapInner::open(file, prot, 0, len).map(|inner| Mmap { inner: inner })
     }
@@ -101,7 +102,7 @@ impl Mmap {
     /// Opens a file-backed memory map.
     ///
     /// The file must not be empty.
-    pub fn open_path<P>(path: P, prot: Protection) -> io::Result<Mmap>
+    pub fn open_path<P>(path: P, prot: Protection) -> Result<Mmap>
     where P: AsRef<Path> {
         let file = try!(prot.as_open_options().open(path));
         let len = try!(file.metadata()).len() as usize;
@@ -115,14 +116,14 @@ impl Mmap {
     pub fn open_with_offset(file: File,
                             prot: Protection,
                             offset: usize,
-                            len: usize) -> io::Result<Mmap> {
+                            len: usize) -> Result<Mmap> {
         MmapInner::open(file, prot, offset, len).map(|inner| Mmap { inner: inner })
     }
 
     /// Opens an anonymous memory map.
     ///
     /// The length must be greater than zero.
-    pub fn anonymous(len: usize, prot: Protection) -> io::Result<Mmap> {
+    pub fn anonymous(len: usize, prot: Protection) -> Result<Mmap> {
         MmapInner::anonymous(len, prot).map(|inner| Mmap { inner: inner })
     }
 
@@ -131,7 +132,7 @@ impl Mmap {
     /// When this returns with a non-error result, all outstanding changes to a file-backed memory
     /// map are guaranteed to be durably stored. The file's metadata (including last modification
     /// timestamp) may not be updated.
-    pub fn flush(&mut self) -> io::Result<()> {
+    pub fn flush(&mut self) -> Result<()> {
         let len = self.len();
         self.inner.flush(0, len)
     }
@@ -141,7 +142,7 @@ impl Mmap {
     /// This method initiates flushing modified pages to durable storage, but it will not wait
     /// for the operation to complete before returning. The file's metadata (including last
     /// modification timestamp) may not be updated.
-    pub fn flush_async(&mut self) -> io::Result<()> {
+    pub fn flush_async(&mut self) -> Result<()> {
         let len = self.len();
         self.inner.flush_async(0, len)
     }
@@ -155,7 +156,7 @@ impl Mmap {
     /// modification timestamp) may not be updated. It is not guaranteed the only the changes in
     /// the specified range are flushed; other outstanding changes to the mmap may be flushed as
     /// well.
-    pub fn flush_range(&mut self, offset: usize, len: usize) -> io::Result<()> {
+    pub fn flush_range(&mut self, offset: usize, len: usize) -> Result<()> {
         self.inner.flush(offset, len)
     }
 
@@ -168,7 +169,7 @@ impl Mmap {
     /// modification timestamp) may not be updated. It is not guaranteed that the only changes
     /// flushed are those in the specified range; other outstanding changes to the mmap may be
     /// flushed as well.
-    pub fn flush_async_range(&mut self, offset: usize, len: usize) -> io::Result<()> {
+    pub fn flush_async_range(&mut self, offset: usize, len: usize) -> Result<()> {
         self.inner.flush_async(offset, len)
     }
 
@@ -243,25 +244,32 @@ impl MmapView {
     /// Split the view into disjoint pieces at the specified offset.
     ///
     /// The provided offset must be less than the view's length.
-    pub fn split_at(self, offset: usize) -> (MmapView, MmapView) {
-        assert!(offset < self.len, "MmapView split offset must be less than the view length");
+    pub fn split_at(self, offset: usize) -> Result<(MmapView, MmapView)> {
+        if self.len < offset {
+            return Err(Error::new(ErrorKind::InvalidInput,
+                                      "mmap view split offset must be less than the view length"));
+        }
         let MmapView { inner, offset: self_offset, len: self_len } = self;
-        (MmapView { inner: inner.clone(),
-                    offset: self_offset,
-                    len: offset },
-         MmapView { inner: inner,
-                    offset: self_offset + offset,
-                    len: self_len - offset })
+        Ok((MmapView { inner: inner.clone(),
+                       offset: self_offset,
+                       len: offset },
+            MmapView { inner: inner,
+                       offset: self_offset + offset,
+                       len: self_len - offset }))
     }
 
     /// Restricts the range of the view to the provided offset and length.
     ///
     /// The provided range must be a subset of the current range (`offset + len < view.len()`).
-    pub fn restrict(&mut self, offset: usize, len: usize) {
-        // Maybe return a result and return an Err on out-of-bounds?
-        assert!(offset + len < self.len);
+    pub fn restrict(&mut self, offset: usize, len: usize) -> Result<()> {
+        if offset + len > self.len {
+            return Err(Error::new(ErrorKind::InvalidInput,
+                                  "mmap view may only be restricted to a subrange \
+                                   of the current view"));
+        }
         self.offset = self.offset + offset;
         self.len = len;
+        Ok(())
     }
 
     /// Get a reference to the inner mmap.
@@ -289,7 +297,7 @@ impl MmapView {
     /// When this returns with a non-error result, all outstanding changes to a file-backed memory
     /// map view are guaranteed to be durably stored. The file's metadata (including last
     /// modification timestamp) may not be updated.
-    pub fn flush(&mut self) -> io::Result<()> {
+    pub fn flush(&mut self) -> Result<()> {
         self.inner_mut().flush_range(self.offset, self.len)
     }
 
@@ -298,7 +306,7 @@ impl MmapView {
     /// This method initiates flushing modified pages to durable storage, but it will not wait
     /// for the operation to complete before returning. The file's metadata (including last
     /// modification timestamp) may not be updated.
-    pub fn flush_async(&mut self) -> io::Result<()> {
+    pub fn flush_async(&mut self) -> Result<()> {
         // TODO: this should be restricted to flushing the view.
         self.inner_mut().flush_async_range(self.offset, self.len)
     }
@@ -358,25 +366,32 @@ impl MmapViewSync {
     /// Split the view into disjoint pieces at the specified offset.
     ///
     /// The provided offset must be less than the view's length.
-    pub fn split_at(self, offset: usize) -> (MmapViewSync, MmapViewSync) {
-        assert!(offset < self.len, "MmapView split offset must be less than the view length");
+    pub fn split_at(self, offset: usize) -> Result<(MmapViewSync, MmapViewSync)> {
+        if self.len < offset {
+            return Err(Error::new(ErrorKind::InvalidInput,
+                                      "mmap view split offset must be less than the view length"));
+        }
         let MmapViewSync { inner, offset: self_offset, len: self_len } = self;
-        (MmapViewSync { inner: inner.clone(),
-                    offset: self_offset,
-                    len: offset },
-         MmapViewSync { inner: inner,
-                    offset: self_offset + offset,
-                    len: self_len - offset })
+        Ok((MmapViewSync { inner: inner.clone(),
+                           offset: self_offset,
+                           len: offset },
+            MmapViewSync { inner: inner,
+                           offset: self_offset + offset,
+                           len: self_len - offset }))
     }
 
     /// Restricts the range of this view to the provided offset and length.
     ///
     /// The provided range must be a subset of the current range (`offset + len < view.len()`).
-    pub fn restrict(&mut self, offset: usize, len: usize) {
-        // Maybe return a result and return an Err on out-of-bounds?
-        assert!(offset + len < self.len);
+    pub fn restrict(&mut self, offset: usize, len: usize) -> Result<()> {
+        if offset + len > self.len {
+            return Err(Error::new(ErrorKind::InvalidInput,
+                                      "mmap view may only be restricted to a subrange \
+                                       of the current view"));
+        }
         self.offset = self.offset + offset;
         self.len = len;
+        Ok(())
     }
 
     /// Get a reference to the inner mmap.
@@ -402,7 +417,7 @@ impl MmapViewSync {
     /// When this returns with a non-error result, all outstanding changes to a file-backed memory
     /// map view are guaranteed to be durably stored. The file's metadata (including last
     /// modification timestamp) may not be updated.
-    pub fn flush(&mut self) -> io::Result<()> {
+    pub fn flush(&mut self) -> Result<()> {
         // TODO: this should be restricted to flushing the view.
         self.inner_mut().flush()
     }
@@ -412,7 +427,7 @@ impl MmapViewSync {
     /// This method initiates flushing modified pages to durable storage, but it will not wait
     /// for the operation to complete before returning. The file's metadata (including last
     /// modification timestamp) may not be updated.
-    pub fn flush_async(&mut self) -> io::Result<()> {
+    pub fn flush_async(&mut self) -> Result<()> {
         // TODO: this should be restricted to flushing the view.
         self.inner_mut().flush_async()
     }
@@ -651,14 +666,14 @@ mod test {
         // write values into the view
         unsafe { view.as_mut_slice() }.write_all(&incr[..]).unwrap();
 
-        let (mut view1, view2) = view.split_at(32);
+        let (mut view1, view2) = view.split_at(32).unwrap();
         assert_eq!(view1.len(), split);
         assert_eq!(view2.len(), len - split);
 
         assert_eq!(&incr[0..split], unsafe { view1.as_slice() });
         assert_eq!(&incr[split..], unsafe { view2.as_slice() });
 
-        view1.restrict(10, 10);
+        view1.restrict(10, 10).unwrap();
         assert_eq!(&incr[10..20], unsafe { view1.as_slice() })
     }
 
@@ -671,14 +686,14 @@ mod test {
         // write values into the view
         unsafe { view.as_mut_slice() }.write_all(&incr[..]).unwrap();
 
-        let (mut view1, view2) = view.split_at(32);
+        let (mut view1, view2) = view.split_at(32).unwrap();
         assert_eq!(view1.len(), split);
         assert_eq!(view2.len(), len - split);
 
         assert_eq!(&incr[0..split], unsafe { view1.as_slice() });
         assert_eq!(&incr[split..], unsafe { view2.as_slice() });
 
-        view1.restrict(10, 10);
+        view1.restrict(10, 10).unwrap();
         assert_eq!(&incr[10..20], unsafe { view1.as_slice() })
     }
 
@@ -704,7 +719,8 @@ mod test {
         let (mut view1, mut view2) = Mmap::open_path(&path, Protection::ReadWrite)
                                          .unwrap()
                                          .into_view_sync()
-                                         .split_at(split);
+                                         .split_at(split)
+                                         .unwrap();
 
 
         let join1 = thread::spawn(move || {
