@@ -240,7 +240,7 @@ pub struct MmapView {
 
 impl MmapView {
 
-    /// Split the view into disjoint pieces.
+    /// Split the view into disjoint pieces at the specified offset.
     ///
     /// The provided offset must be less than the view's length.
     pub fn split_at(self, offset: usize) -> (MmapView, MmapView) {
@@ -252,6 +252,16 @@ impl MmapView {
          MmapView { inner: inner,
                     offset: self_offset + offset,
                     len: self_len - offset })
+    }
+
+    /// Restricts the range of the view to the provided offset and length.
+    ///
+    /// The provided range must be a subset of the current range (`offset + len < view.len()`).
+    pub fn restrict(&mut self, offset: usize, len: usize) {
+        // Maybe return a result and return an Err on out-of-bounds?
+        assert!(offset + len < self.len);
+        self.offset = self.offset + offset;
+        self.len = len;
     }
 
     /// Get a reference to the inner mmap.
@@ -345,7 +355,7 @@ pub struct MmapViewSync {
 
 impl MmapViewSync {
 
-    /// Split the view into disjoint pieces.
+    /// Split the view into disjoint pieces at the specified offset.
     ///
     /// The provided offset must be less than the view's length.
     pub fn split_at(self, offset: usize) -> (MmapViewSync, MmapViewSync) {
@@ -359,10 +369,19 @@ impl MmapViewSync {
                     len: self_len - offset })
     }
 
+    /// Restricts the range of this view to the provided offset and length.
+    ///
+    /// The provided range must be a subset of the current range (`offset + len < view.len()`).
+    pub fn restrict(&mut self, offset: usize, len: usize) {
+        // Maybe return a result and return an Err on out-of-bounds?
+        assert!(offset + len < self.len);
+        self.offset = self.offset + offset;
+        self.len = len;
+    }
+
     /// Get a reference to the inner mmap.
     ///
-    /// The caller must ensure that memory outside the `offset`/`len` range is
-    /// not accessed.
+    /// The caller must ensure that memory outside the `offset`/`len` range is not accessed.
     fn inner(&self) -> &Mmap {
         unsafe {
             &*self.inner.get()
@@ -371,8 +390,7 @@ impl MmapViewSync {
 
     /// Get a mutable reference to the inner mmap.
     ///
-    /// The caller must ensure that memory outside the `offset`/`len` range is
-    /// not accessed.
+    /// The caller must ensure that memory outside the `offset`/`len` range is not accessed.
     fn inner_mut(&self) -> &mut Mmap {
         unsafe {
             &mut *self.inner.get()
@@ -633,12 +651,15 @@ mod test {
         // write values into the view
         unsafe { view.as_mut_slice() }.write_all(&incr[..]).unwrap();
 
-        let (view1, view2) = view.split_at(32);
+        let (mut view1, view2) = view.split_at(32);
         assert_eq!(view1.len(), split);
         assert_eq!(view2.len(), len - split);
 
         assert_eq!(&incr[0..split], unsafe { view1.as_slice() });
         assert_eq!(&incr[split..], unsafe { view2.as_slice() });
+
+        view1.restrict(10, 10);
+        assert_eq!(&incr[10..20], unsafe { view1.as_slice() })
     }
 
     #[test]
@@ -650,12 +671,15 @@ mod test {
         // write values into the view
         unsafe { view.as_mut_slice() }.write_all(&incr[..]).unwrap();
 
-        let (view1, view2) = view.split_at(32);
+        let (mut view1, view2) = view.split_at(32);
         assert_eq!(view1.len(), split);
         assert_eq!(view2.len(), len - split);
 
         assert_eq!(&incr[0..split], unsafe { view1.as_slice() });
         assert_eq!(&incr[split..], unsafe { view2.as_slice() });
+
+        view1.restrict(10, 10);
+        assert_eq!(&incr[10..20], unsafe { view1.as_slice() })
     }
 
     #[test]
