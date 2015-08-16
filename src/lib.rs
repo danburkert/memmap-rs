@@ -19,6 +19,8 @@ use std::{io, slice};
 use std::fs::{self, File};
 use std::path::Path;
 
+pub mod mmap_sliver;
+
 /// Memory map protection.
 ///
 /// Determines how a memory map may be used. If the memory map is backed by a file, then the file
