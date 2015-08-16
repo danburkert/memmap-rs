@@ -132,7 +132,8 @@ impl Mmap {
     /// map are guaranteed to be durably stored. The file's metadata (including last modification
     /// timestamp) may not be updated.
     pub fn flush(&mut self) -> io::Result<()> {
-        self.inner.flush()
+        let len = self.len();
+        self.inner.flush(0, len)
     }
 
     /// Asynchronously flushes outstanding memory map modifications to disk.
@@ -141,7 +142,34 @@ impl Mmap {
     /// for the operation to complete before returning. The file's metadata (including last
     /// modification timestamp) may not be updated.
     pub fn flush_async(&mut self) -> io::Result<()> {
-        self.inner.flush_async()
+        let len = self.len();
+        self.inner.flush_async(0, len)
+    }
+
+    /// Flushes outstanding memory map modifications in the range to disk.
+    ///
+    /// The offset and length must be in the bounds of the mmap.
+    ///
+    /// When this returns with a non-error result, all outstanding changes to a file-backed memory
+    /// in the range are guaranteed to be durable stored. The file's metadata (including last
+    /// modification timestamp) may not be updated. It is not guaranteed the only the changes in
+    /// the specified range are flushed; other outstanding changes to the mmap may be flushed as
+    /// well.
+    pub fn flush_range(&mut self, offset: usize, len: usize) -> io::Result<()> {
+        self.inner.flush(offset, len)
+    }
+
+    /// Asynchronously flushes outstanding memory map modifications in the range to disk.
+    ///
+    /// The offset and length must be in the bounds of the mmap.
+    ///
+    /// This method initiates flushing modified pages to durable storage, but it will not wait
+    /// for the operation to complete before returning. The file's metadata (including last
+    /// modification timestamp) may not be updated. It is not guaranteed that the only changes
+    /// flushed are those in the specified range; other outstanding changes to the mmap may be
+    /// flushed as well.
+    pub fn flush_async_range(&mut self, offset: usize, len: usize) -> io::Result<()> {
+        self.inner.flush_async(offset, len)
     }
 
     /// Returns the length of the memory map.
@@ -252,8 +280,7 @@ impl MmapView {
     /// map view are guaranteed to be durably stored. The file's metadata (including last
     /// modification timestamp) may not be updated.
     pub fn flush(&mut self) -> io::Result<()> {
-        // TODO: this should be restricted to flushing the view.
-        self.inner_mut().flush()
+        self.inner_mut().flush_range(self.offset, self.len)
     }
 
     /// Asynchronously flushes outstanding memory map view modifications to disk.
@@ -263,7 +290,7 @@ impl MmapView {
     /// modification timestamp) may not be updated.
     pub fn flush_async(&mut self) -> io::Result<()> {
         // TODO: this should be restricted to flushing the view.
-        self.inner_mut().flush_async()
+        self.inner_mut().flush_async_range(self.offset, self.len)
     }
 
     /// Returns the length of the memory map view.
@@ -629,6 +656,49 @@ mod test {
 
         assert_eq!(&incr[0..split], unsafe { view1.as_slice() });
         assert_eq!(&incr[split..], unsafe { view2.as_slice() });
+    }
+
+    #[test]
+    fn view_write() {
+        let len   = 131072; // 256KiB
+        let split =  66560; // 65KiB + 10B
+
+        let tempdir = tempdir::TempDir::new("mmap").unwrap();
+        let path = tempdir.path().join("mmap");
+
+        let mut file = fs::OpenOptions::new()
+                                       .read(true)
+                                       .write(true)
+                                       .create(true)
+                                       .open(&path).unwrap();
+        file.set_len(len).unwrap();
+
+        let incr = (0..len).map(|n| n as u8).collect::<Vec<_>>();
+        let incr1 = incr[0..split].to_owned();
+        let incr2 = incr[split..].to_owned();
+
+        let (mut view1, mut view2) = Mmap::open_path(&path, Protection::ReadWrite)
+                                         .unwrap()
+                                         .into_view_sync()
+                                         .split_at(split);
+
+
+        let join1 = thread::spawn(move || {
+            unsafe { view1.as_mut_slice() }.write(&incr1).unwrap();
+            view1.flush().unwrap();
+        });
+
+        let join2 = thread::spawn(move || {
+            unsafe { view2.as_mut_slice() }.write(&incr2).unwrap();
+            view2.flush().unwrap();
+        });
+
+        join1.join().unwrap();
+        join2.join().unwrap();
+
+        let mut buf = Vec::new();
+        file.read_to_end(&mut buf).unwrap();
+        assert_eq!(incr, &buf[..]);
     }
 
     #[test]
