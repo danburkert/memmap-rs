@@ -212,7 +212,7 @@ pub struct MmapView {
 
 impl MmapView {
 
-    /// Split the view into disjoint pieces.
+    /// Split the view into disjoint pieces at specified offset.
     ///
     /// The provided offset must be less than the view's length.
     pub fn split_at(self, offset: usize) -> (MmapView, MmapView) {
@@ -224,6 +224,23 @@ impl MmapView {
          MmapView { inner: inner,
                     offset: self_offset + offset,
                     len: self_len - offset })
+    }
+
+    /// Split the view into disjoint pieces with specified
+    /// offets and lengths
+    ///
+    /// The provided offset and length must not exceed the view's length.
+    pub fn carve(self, subviews: &[(usize,usize)]) -> Vec<MmapView> {
+        let MmapView { inner, offset: self_offset, len: self_len } = self;
+
+        subviews.iter().map(|&(offset, len)| {
+            assert!( self_offset+offset < self_len, "MmapView carve offset+len must be less than the view length");
+            MmapView {
+                inner: inner.clone(),
+                offset: self_offset + offset,
+                len: len
+            }
+        }).collect()
     }
 
     /// Get a reference to the inner mmap.
@@ -612,6 +629,11 @@ mod test {
 
         assert_eq!(&incr[0..split], unsafe { view1.as_slice() });
         assert_eq!(&incr[split..], unsafe { view2.as_slice() });
+
+        let view1_subviews = view1.carve(&vec![ (0,10), (15,17) ]);
+        assert_eq!(view1_subviews.len(), 2);
+        assert_eq!(&incr[0..10], unsafe { view1_subviews[0].as_slice() });
+        assert_eq!(&incr[15..32], unsafe { view1_subviews[1].as_slice() })
     }
 
     #[test]
