@@ -629,6 +629,11 @@ mod test {
 
         assert_eq!(&incr[0..split], unsafe { view1.as_slice() });
         assert_eq!(&incr[split..], unsafe { view2.as_slice() });
+
+        let view1_subviews = view1.carve(&vec![ (0,10), (15,17) ]);
+        assert_eq!(view1_subviews.len(), 2);
+        assert_eq!(&incr[0..10], unsafe { view1_subviews[0].as_slice() });
+        assert_eq!(&incr[15..32], unsafe { view1_subviews[1].as_slice() })
     }
 
     #[test]
