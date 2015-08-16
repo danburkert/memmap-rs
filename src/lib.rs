@@ -1,4 +1,4 @@
-//! A cross-platform Rust API for memory-mapped file IO.
+//! A cross-platform Rust API for memory maps.
 
 #![deny(warnings)]
 
@@ -16,8 +16,10 @@ mod posix;
 use posix::MmapInner;
 
 use std::{io, slice};
+use std::cell::UnsafeCell;
 use std::fs::{self, File};
 use std::path::Path;
+use std::rc::Rc;
 
 /// Memory map protection.
 ///
@@ -146,14 +148,14 @@ impl Mmap {
         self.inner.len()
     }
 
-    /// Returns a pointer to the memory mapped file.
+    /// Returns a pointer to the mapped memory.
     ///
     /// See `Mmap::as_slice` for invariants that must hold when dereferencing the pointer.
     pub fn ptr(&self) -> *const u8 {
         self.inner.ptr()
     }
 
-    /// Returns a pointer to the memory mapped file.
+    /// Returns a pointer to the mapped memory.
     ///
     /// See `Mmap::as_mut_slice` for invariants that must hold when dereferencing the pointer.
     pub fn mut_ptr(&mut self) -> *mut u8 {
@@ -177,6 +179,120 @@ impl Mmap {
     pub unsafe fn as_mut_slice(&mut self) -> &mut [u8] {
         slice::from_raw_parts_mut(self.mut_ptr(), self.len())
     }
+
+    pub fn into_view(self) -> MmapView {
+        let len = self.len();
+        MmapView { inner: Rc::new(UnsafeCell::new(self)),
+                   offset: 0,
+                   len: len }
+    }
+}
+
+/// A view of a memory map.
+///
+/// The view may be split into disjoint ranges, each of which will share the
+/// underlying memory map.
+///
+/// A mmap view is not cloneable.
+pub struct MmapView {
+    inner: Rc<UnsafeCell<Mmap>>,
+    offset: usize,
+    len: usize,
+}
+
+impl MmapView {
+
+    /// Split the view into disjoint pieces.
+    ///
+    /// The provided offset must be less than the view's length.
+    pub fn split_at(self, offset: usize) -> (MmapView, MmapView) {
+        assert!(offset < self.len, "MmapView split offset must be less than the view length");
+        let MmapView { inner, offset: self_offset, len: self_len } = self;
+        (MmapView { inner: inner.clone(),
+                    offset: self_offset,
+                    len: offset },
+         MmapView { inner: inner,
+                    offset: self_offset + offset,
+                    len: self_len - offset })
+    }
+
+    /// Get a reference to the inner mmap.
+    ///
+    /// The caller must ensure that memory outside the `offset`/`len` range is
+    /// not accessed.
+    fn inner(&self) -> &Mmap {
+        unsafe {
+            &*self.inner.get()
+        }
+    }
+
+    /// Get a mutable reference to the inner mmap.
+    ///
+    /// The caller must ensure that memory outside the `offset`/`len` range is
+    /// not accessed.
+    fn inner_mut(&self) -> &mut Mmap {
+        unsafe {
+            &mut *self.inner.get()
+        }
+    }
+
+    /// Flushes outstanding view modifications to disk.
+    ///
+    /// When this returns with a non-error result, all outstanding changes to a file-backed memory
+    /// map view are guaranteed to be durably stored. The file's metadata (including last
+    /// modification timestamp) may not be updated.
+    pub fn flush(&mut self) -> io::Result<()> {
+        // TODO: this should be restricted to flushing the view.
+        self.inner_mut().flush()
+    }
+
+    /// Asynchronously flushes outstanding memory map view modifications to disk.
+    ///
+    /// This method initiates flushing modified pages to durable storage, but it will not wait
+    /// for the operation to complete before returning. The file's metadata (including last
+    /// modification timestamp) may not be updated.
+    pub fn flush_async(&mut self) -> io::Result<()> {
+        // TODO: this should be restricted to flushing the view.
+        self.inner_mut().flush_async()
+    }
+
+    /// Returns the length of the memory map view.
+    pub fn len(&self) -> usize {
+        self.len
+    }
+
+    /// Returns a pointer to the mapped mapped.
+    ///
+    /// See `Mmap::as_slice` for invariants that must hold when dereferencing the pointer.
+    pub fn ptr(&self) -> *const u8 {
+        unsafe { self.inner().ptr().offset(self.offset as isize) }
+    }
+
+    /// Returns a pointer to the mapped memory.
+    ///
+    /// See `Mmap::as_mut_slice` for invariants that must hold when dereferencing the pointer.
+    pub fn mut_ptr(&mut self) -> *mut u8 {
+        unsafe { self.inner_mut().mut_ptr().offset(self.offset as isize) }
+    }
+
+    /// Returns the memory mapped file as an immutable slice.
+    ///
+    /// ## Unsafety
+    ///
+    /// The caller must ensure that the file is not concurrently modified.
+    pub unsafe fn as_slice(&self) -> &[u8] {
+        &self.inner().as_slice()[self.offset..self.offset + self.len]
+    }
+
+    /// Returns the memory mapped file as a mutable slice.
+    ///
+    /// ## Unsafety
+    ///
+    /// The caller must ensure that the file is not concurrently accessed.
+    pub unsafe fn as_mut_slice(&mut self) -> &mut [u8] {
+        &mut self.inner_mut().as_mut_slice()[self.offset..self.offset + self.len]
+    }
+
 }
 
 #[cfg(test)]
@@ -361,5 +477,22 @@ mod test {
                 mmap.as_slice();
             }
         });
+    }
+
+    #[test]
+    fn test_view() {
+        let len = 128;
+        let split = 32;
+        let mut view = Mmap::anonymous(len, Protection::ReadWrite).unwrap().into_view();
+        let incr = (0..len).map(|n| n as u8).collect::<Vec<_>>();
+        // write values into the view
+        unsafe { view.as_mut_slice() }.write_all(&incr[..]).unwrap();
+
+        let (view1, view2) = view.split_at(32);
+        assert_eq!(view1.len(), split);
+        assert_eq!(view2.len(), len - split);
+
+        assert_eq!(&incr[0..split], unsafe { view1.as_slice() });
+        assert_eq!(&incr[split..], unsafe { view2.as_slice() });
     }
 }
