@@ -4,6 +4,7 @@ use std::{self, io, ptr};
 use std::fs::File;
 
 use ::Protection;
+use ::MmapOptions;
 
 impl Protection {
 
@@ -22,6 +23,14 @@ impl Protection {
             Protection::ReadWrite => libc::MAP_SHARED,
             Protection::ReadCopy => libc::MAP_PRIVATE,
         }
+    }
+}
+
+impl MmapOptions {
+    fn as_flag(self) -> libc::c_int {
+        let mut flag = 0;
+        if self.stack { flag |= libc::MAP_STACK }
+        flag
     }
 }
 
@@ -57,12 +66,12 @@ impl MmapInner {
     }
 
     /// Open an anonymous memory map.
-    pub fn anonymous(len: usize, prot: Protection) -> io::Result<MmapInner> {
+    pub fn anonymous(len: usize, prot: Protection, options: MmapOptions) -> io::Result<MmapInner> {
         let ptr = unsafe {
             libc::mmap(ptr::null_mut(),
                        len as libc::size_t,
                        prot.as_prot(),
-                       prot.as_flag() | libc::MAP_ANON,
+                       options.as_flag() | prot.as_flag() | libc::MAP_ANON,
                        -1,
                        0)
         };

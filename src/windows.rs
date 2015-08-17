@@ -7,6 +7,7 @@ use std::os::raw::c_void;
 use std::os::windows::io::AsRawHandle;
 
 use ::Protection;
+use ::MmapOptions;
 
 impl Protection {
 
@@ -72,7 +73,7 @@ impl MmapInner {
         }
     }
 
-    pub fn anonymous(len: usize, prot: Protection) -> io::Result<MmapInner> {
+    pub fn anonymous(len: usize, prot: Protection, _options: MmapOptions) -> io::Result<MmapInner> {
         unsafe {
             let handle = kernel32::CreateFileMappingW(winapi::INVALID_HANDLE_VALUE,
                                                       ptr::null_mut(),

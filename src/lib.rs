@@ -62,6 +62,14 @@ impl Protection {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct MmapOptions {
+    /// Indicates that the memory map should be suitable for a stack.
+    ///
+    /// This option should only be used with anonymous memory maps.
+    pub stack: bool,
+}
+
 /// A memory-mapped buffer.
 ///
 /// A file-backed `Mmap` buffer may be used to read or write data to a file. Use `Mmap::open(..)` to
@@ -124,7 +132,16 @@ impl Mmap {
     ///
     /// The length must be greater than zero.
     pub fn anonymous(len: usize, prot: Protection) -> Result<Mmap> {
-        MmapInner::anonymous(len, prot).map(|inner| Mmap { inner: inner })
+        Mmap::anonymous_with_options(len, prot, Default::default())
+    }
+
+    /// Opens an anonymous memory map with the provided options.
+    ///
+    /// The length must be greater than zero.
+    pub fn anonymous_with_options(len: usize,
+                                  prot: Protection,
+                                  options: MmapOptions) -> Result<Mmap> {
+        MmapInner::anonymous(len, prot, options).map(|inner| Mmap { inner: inner })
     }
 
     /// Flushes outstanding memory map modifications to disk.
