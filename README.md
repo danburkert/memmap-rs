@@ -7,7 +7,6 @@ cross-platform Rust API for memory-mapped file IO.
 [![Linux build Status](https://travis-ci.org/danburkert/memmap-rs.svg?branch=master)](https://travis-ci.org/danburkert/memmap-rs)
 [![Windows build status](https://ci.appveyor.com/api/projects/status/ubka00959pstatkg?svg=true)](https://ci.appveyor.com/project/danburkert/mmap)
 
-
 ## Features
 
 - [x] POSIX support
