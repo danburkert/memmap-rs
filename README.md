@@ -1,11 +1,12 @@
-# mmap
+# memmap
 
 cross-platform Rust API for memory-mapped file IO.
 
-[rustdoc](https://danburkert.github.io/mmap/mmap/index.html)
+[rustdoc](https://danburkert.github.io/memmap-rs/memmap/index.html)
 
-[![linux build status](https://travis-ci.org/danburkert/mmap.svg?branch=master)](https://travis-ci.org/danburkert/mmap)
-[![windows build status](https://ci.appveyor.com/api/projects/status/ubka00959pstatkg/branch/master?svg=true)](https://ci.appveyor.com/project/danburkert/mmap/branch/master)
+[![Linux build Status](https://travis-ci.org/danburkert/memmap-rs.svg?branch=master)](https://travis-ci.org/danburkert/memmap-rs)
+[![Windows build status](https://ci.appveyor.com/api/projects/status/ubka00959pstatkg?svg=true)](https://ci.appveyor.com/project/danburkert/mmap)
+
 
 ## Features
 
@@ -18,3 +19,13 @@ cross-platform Rust API for memory-mapped file IO.
 - [x] read-only memory maps
 - [x] stack support (`MAP_STACK` on unix)
 - [ ] huge page support
+
+## License
+
+`memmap` is primarily distributed under the terms of both the MIT license and the
+Apache License (Version 2.0).
+
+See [LICENSE-APACHE](LICENSE-APACHE), [LICENSE-MIT](LICENSE-MIT) for details.
+
+Copyright (c) 2015 Dan Burkert.
+
