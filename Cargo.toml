@@ -1,7 +1,17 @@
 [package]
-name = "mmap"
-version = "0.0.1"
+name = "memmap"
+version = "0.1.0"
 authors = ["Dan Burkert <dan@danburkert.com>"]
+license = "MIT/Apache-2.0"
+repository = "https://github.com/danburkert/memmap-rs"
+documentation = "https://danburkert.github.io/memmap-rs/memmap/index.html"
+description = "Cross-platform Rust API for memory-mapped file IO"
+keywords = ["mmap", "memory map", "io", "file"]
+exclude = [
+  ".appveyor.yml",
+  ".gitignore",
+  ".travis.yml",
+]
 
 [dependencies]
 bitflags = "*"

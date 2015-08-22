@@ -82,11 +82,11 @@ pub struct MmapOptions {
 ///
 /// ```
 /// use std::io::Write;
-/// use mmap::{Mmap, Protection};
+/// use memmap::{Mmap, Protection};
 ///
 /// let file_mmap = Mmap::open_path("README.md", Protection::Read).unwrap();
 /// let bytes: &[u8] = unsafe { file_mmap.as_slice() };
-/// assert_eq!(b"# mmap", unsafe { &file_mmap.as_slice()[0..6] });
+/// assert_eq!(b"# memmap", &bytes[0..8]);
 ///
 /// let mut anon_mmap = Mmap::anonymous(4096, Protection::ReadWrite).unwrap();
 /// unsafe { anon_mmap.as_mut_slice() }.write(b"foo").unwrap();

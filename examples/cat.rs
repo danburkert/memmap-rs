@@ -1,9 +1,9 @@
-extern crate mmap;
+extern crate memmap;
 
 use std::env;
 use std::io::{self, Write};
 
-use mmap::{Mmap, Protection};
+use memmap::{Mmap, Protection};
 
 /// Output a file's contents to stdout. The file path must be provided as the first process
 /// argument.
