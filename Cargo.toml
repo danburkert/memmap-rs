@@ -14,7 +14,6 @@ exclude = [
 ]
 
 [dependencies]
-bitflags = "*"
 fs2 = "*"
 kernel32-sys = "*"
 libc = "*"

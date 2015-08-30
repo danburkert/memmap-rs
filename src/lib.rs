@@ -2,9 +2,6 @@
 
 #![deny(warnings)]
 
-#[macro_use]
-extern crate bitflags;
-
 #[cfg(windows)]
 mod windows;
 #[cfg(windows)]
