@@ -1,11 +1,11 @@
 # memmap
 
-cross-platform Rust API for memory-mapped file IO.
+A Rust library for cross-platform memory-mapped file IO.
 
-[rustdoc](https://danburkert.github.io/memmap-rs/memmap/index.html)
+[Documentation](https://danburkert.github.io/memmap-rs/memmap/index.html)
 
-[![Linux build Status](https://travis-ci.org/danburkert/memmap-rs.svg?branch=master)](https://travis-ci.org/danburkert/memmap-rs)
-[![Windows build status](https://ci.appveyor.com/api/projects/status/ubka00959pstatkg?svg=true)](https://ci.appveyor.com/project/danburkert/mmap)
+[![Linux Status](https://travis-ci.org/danburkert/memmap-rs.svg?branch=master)](https://travis-ci.org/danburkert/memmap-rs)
+[![Build status](https://ci.appveyor.com/api/projects/status/ubka00959pstatkg/branch/master?svg=true)](https://ci.appveyor.com/project/danburkert/mmap)
 
 ## Features
 
