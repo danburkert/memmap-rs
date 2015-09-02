@@ -1,3 +1,4 @@
+extern crate fs2;
 extern crate kernel32;
 extern crate winapi;
 
@@ -5,6 +6,8 @@ use std::{io, mem, ptr};
 use std::fs::File;
 use std::os::raw::c_void;
 use std::os::windows::io::AsRawHandle;
+
+use self::fs2::FileExt;
 
 use ::Protection;
 use ::MmapOptions;
@@ -38,13 +41,13 @@ pub struct MmapInner {
 
 impl MmapInner {
 
-    pub fn open(file: File, prot: Protection, offset: usize, len: usize) -> io::Result<MmapInner> {
+    pub fn open(file: &File, prot: Protection, offset: usize, len: usize) -> io::Result<MmapInner> {
         let alignment = offset % allocation_granularity();
         let aligned_offset = offset - alignment;
         let aligned_len = len + alignment;
 
         unsafe {
-            let handle = kernel32::CreateFileMappingW(AsRawHandle::as_raw_handle(&file) as *mut c_void,
+            let handle = kernel32::CreateFileMappingW(file.as_raw_handle(),
                                                       ptr::null_mut(),
                                                       prot.as_mapping_flag(),
                                                       0,
@@ -65,7 +68,7 @@ impl MmapInner {
                 Err(io::Error::last_os_error())
             } else {
                 Ok(MmapInner {
-                    file: Some(file),
+                    file: Some(try!(file.duplicate())),
                     ptr: ptr.offset(alignment as isize),
                     len: len as usize,
                 })

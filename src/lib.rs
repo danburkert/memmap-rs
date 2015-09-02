@@ -102,7 +102,7 @@ impl Mmap {
     ///
     /// The file must be opened with read permissions, and write permissions if the supplied
     /// protection is `ReadWrite`. The file must not be empty.
-    pub fn open(file: File, prot: Protection) -> Result<Mmap> {
+    pub fn open(file: &File, prot: Protection) -> Result<Mmap> {
         let len = try!(file.metadata()).len() as usize;
         MmapInner::open(file, prot, 0, len).map(|inner| Mmap { inner: inner })
     }
@@ -114,14 +114,14 @@ impl Mmap {
     where P: AsRef<Path> {
         let file = try!(prot.as_open_options().open(path));
         let len = try!(file.metadata()).len() as usize;
-        MmapInner::open(file, prot, 0, len).map(|inner| Mmap { inner: inner })
+        MmapInner::open(&file, prot, 0, len).map(|inner| Mmap { inner: inner })
     }
 
     /// Opens a file-backed memory map with the specified offset and length.
     ///
     /// The file must be opened with read permissions, and write permissions if the supplied
     /// protection is `ReadWrite`. The file must not be empty. The length must be greater than zero.
-    pub fn open_with_offset(file: File,
+    pub fn open_with_offset(file: &File,
                             prot: Protection,
                             offset: usize,
                             len: usize) -> Result<Mmap> {
@@ -638,7 +638,7 @@ mod test {
         let offset = 5099;
         let len = 50050;
 
-        let mut mmap = Mmap::open_with_offset(file,
+        let mut mmap = Mmap::open_with_offset(&file,
                                               Protection::ReadWrite,
                                               offset,
                                               len).unwrap();

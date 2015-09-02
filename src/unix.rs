@@ -1,7 +1,8 @@
 extern crate libc;
 
-use std::{self, io, ptr};
+use std::{io, ptr};
 use std::fs::File;
+use std::os::unix::io::AsRawFd;
 
 use ::Protection;
 use ::MmapOptions;
@@ -41,7 +42,7 @@ pub struct MmapInner {
 
 impl MmapInner {
 
-    pub fn open(file: File, prot: Protection, offset: usize, len: usize) -> io::Result<MmapInner> {
+    pub fn open(file: &File, prot: Protection, offset: usize, len: usize) -> io::Result<MmapInner> {
         let alignment = offset % page_size();
         let aligned_offset = offset - alignment;
         let aligned_len = len + alignment;
@@ -51,7 +52,7 @@ impl MmapInner {
                                  aligned_len as libc::size_t,
                                  prot.as_prot(),
                                  prot.as_flag(),
-                                 std::os::unix::io::AsRawFd::as_raw_fd(&file),
+                                 file.as_raw_fd(),
                                  aligned_offset as libc::off_t);
 
             if ptr == libc::MAP_FAILED {
