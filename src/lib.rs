@@ -577,11 +577,29 @@ mod test {
         let mut read = [0u8; 6];
 
         let mut mmap = Mmap::open_path(&path, Protection::ReadWrite).unwrap();
-        unsafe { mmap.as_mut_slice() }.write(write).unwrap();
+        unsafe { mmap.as_mut_slice() }.write_all(write).unwrap();
         mmap.flush().unwrap();
 
         file.read(&mut read).unwrap();
         assert_eq!(write, &read);
+    }
+
+    #[test]
+    fn flush_range() {
+        let tempdir = tempdir::TempDir::new("mmap").unwrap();
+        let path = tempdir.path().join("mmap");
+
+        let file = fs::OpenOptions::new()
+                                   .read(true)
+                                   .write(true)
+                                   .create(true)
+                                   .open(&path).unwrap();
+        file.set_len(128).unwrap();
+        let write = b"abc123";
+
+        let mut mmap = Mmap::open_with_offset(&file, Protection::ReadWrite, 2, write.len()).unwrap();
+        unsafe { mmap.as_mut_slice() }.write_all(write).unwrap();
+        mmap.flush_range(0, write.len()).unwrap();
     }
 
     #[test]

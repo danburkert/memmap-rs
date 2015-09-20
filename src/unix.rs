@@ -88,7 +88,10 @@ impl MmapInner {
     }
 
     pub fn flush(&mut self, offset: usize, len: usize) -> io::Result<()> {
-        let result = unsafe { libc::msync(self.ptr.offset(offset as isize),
+        let alignment = (self.ptr as usize + offset) % page_size();
+        let offset = offset as isize - alignment as isize;
+        let len = len + alignment;
+        let result = unsafe { libc::msync(self.ptr.offset(offset),
                                           len as libc::size_t,
                                           libc::MS_SYNC) };
         if result == 0 {
@@ -99,8 +102,11 @@ impl MmapInner {
     }
 
     pub fn flush_async(&mut self, offset: usize, len: usize) -> io::Result<()> {
-        let result = unsafe { libc::msync(self.ptr.offset(offset as isize),
-                                          len as libc::size_t,
+        let alignment = offset % page_size();
+        let aligned_offset = offset - alignment;
+        let aligned_len = len + alignment;
+        let result = unsafe { libc::msync(self.ptr.offset(aligned_offset as isize),
+                                          aligned_len as libc::size_t,
                                           libc::MS_ASYNC) };
         if result == 0 {
             Ok(())
