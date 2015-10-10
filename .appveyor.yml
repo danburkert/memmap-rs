@@ -1,7 +1,14 @@
+environment:
+  matrix:
+    - TARGET: x86_64-pc-windows-msvc
+    - TARGET: i686-pc-windows-msvc
+    - TARGET: x86_64-pc-windows-gnu
+    - TARGET: i686-pc-windows-gnu
+
 install:
-  - ps: Start-FileDownload 'https://static.rust-lang.org/dist/rust-nightly-x86_64-pc-windows-msvc.exe'
-  - rust-nightly-x86_64-pc-windows-msvc.exe /VERYSILENT /NORESTART /DIR="C:\Program Files (x86)\Rust"
-  - SET PATH=%PATH%;C:\Program Files (x86)\Rust\bin
+  - ps: Start-FileDownload "https://static.rust-lang.org/dist/rust-nightly-${env:TARGET}.exe" -FileName "rust-nightly.exe"
+  - ps: .\rust-nightly.exe /VERYSILENT /NORESTART /DIR="C:\rust" | Out-Null
+  - ps: $env:PATH="$env:PATH;C:\rust\bin"
 
 build_script:
   - cargo build -v
