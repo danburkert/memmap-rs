@@ -109,7 +109,7 @@ impl MmapInner {
 
     pub fn flush_async(&mut self, offset: usize, len: usize) -> io::Result<()> {
         let result = unsafe { kernel32::FlushViewOfFile(self.ptr.offset(offset as isize),
-                                                        len as u64) };
+                                                        len as winapi::SIZE_T) };
         if result != 0 {
             Ok(())
         } else {
