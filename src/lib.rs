@@ -22,21 +22,23 @@ use std::sync::Arc;
 
 /// Memory map protection.
 ///
-/// Determines how a memory map may be used. If the memory map is backed by a file, then the file
-/// must have permissions corresponding to the operations the protection level allows.
+/// Determines how a memory map may be used. If the memory map is backed by a
+/// file, then the file must have permissions corresponding to the operations
+/// the protection level allows.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Protection {
 
     /// A read-only memory map. Writes to the memory map will result in a panic.
     Read,
 
-    /// A read-write memory map. Writes to the memory map will be reflected in the file after a
-    /// call to `Mmap::flush` or after the `Mmap` is dropped.
+    /// A read-write memory map. Writes to the memory map will be reflected in
+    /// the file after a call to `Mmap::flush` or after the `Mmap` is dropped.
     ReadWrite,
 
-    /// A read, copy-on-write memory map. Writes to the memory map will not be carried through to
-    /// the underlying file. It is unspecified whether changes made to the file after the memory map
-    /// is created will be visible.
+    /// A read, copy-on-write memory map. Writes to the memory map will not be
+    /// carried through to the underlying file. It is unspecified whether
+    /// changes made to the file after the memory map is created will be
+    /// visible.
     ReadCopy,
 }
 
@@ -69,13 +71,14 @@ pub struct MmapOptions {
 
 /// A memory-mapped buffer.
 ///
-/// A file-backed `Mmap` buffer may be used to read or write data to a file. Use `Mmap::open(..)` to
-/// create a file-backed memory map. An anonymous `Mmap` buffer may be used any place that an
-/// in-memory byte buffer is needed, and gives the added features of a memory map. Use
-/// `Mmap::anonymous(..)` to create an anonymous memory map.
+/// A file-backed `Mmap` buffer may be used to read or write data to a file. Use
+/// `Mmap::open(..)` to create a file-backed memory map. An anonymous `Mmap`
+/// buffer may be used any place that an in-memory byte buffer is needed, and
+/// gives the added features of a memory map. Use `Mmap::anonymous(..)` to
+/// create an anonymous memory map.
 ///
-/// Changes written to a memory-mapped file are not guaranteed to be durable until the memory map is
-/// flushed, or it is dropped.
+/// Changes written to a memory-mapped file are not guaranteed to be durable
+/// until the memory map is flushed, or it is dropped.
 ///
 /// ```
 /// use std::io::Write;
@@ -97,8 +100,8 @@ impl Mmap {
 
     /// Opens a file-backed memory map.
     ///
-    /// The file must be opened with read permissions, and write permissions if the supplied
-    /// protection is `ReadWrite`. The file must not be empty.
+    /// The file must be opened with read permissions, and write permissions if
+    /// the supplied protection is `ReadWrite`. The file must not be empty.
     pub fn open(file: &File, prot: Protection) -> Result<Mmap> {
         let len = try!(file.metadata()).len() as usize;
         MmapInner::open(file, prot, 0, len).map(|inner| Mmap { inner: inner })
@@ -116,8 +119,9 @@ impl Mmap {
 
     /// Opens a file-backed memory map with the specified offset and length.
     ///
-    /// The file must be opened with read permissions, and write permissions if the supplied
-    /// protection is `ReadWrite`. The file must not be empty. The length must be greater than zero.
+    /// The file must be opened with read permissions, and write permissions if
+    /// the supplied protection is `ReadWrite`. The file must not be empty. The
+    /// length must be greater than zero.
     pub fn open_with_offset(file: &File,
                             prot: Protection,
                             offset: usize,
@@ -143,9 +147,9 @@ impl Mmap {
 
     /// Flushes outstanding memory map modifications to disk.
     ///
-    /// When this returns with a non-error result, all outstanding changes to a file-backed memory
-    /// map are guaranteed to be durably stored. The file's metadata (including last modification
-    /// timestamp) may not be updated.
+    /// When this returns with a non-error result, all outstanding changes to a
+    /// file-backed memory map are guaranteed to be durably stored. The file's
+    /// metadata (including last modification timestamp) may not be updated.
     pub fn flush(&mut self) -> Result<()> {
         let len = self.len();
         self.inner.flush(0, len)
@@ -153,9 +157,9 @@ impl Mmap {
 
     /// Asynchronously flushes outstanding memory map modifications to disk.
     ///
-    /// This method initiates flushing modified pages to durable storage, but it will not wait
-    /// for the operation to complete before returning. The file's metadata (including last
-    /// modification timestamp) may not be updated.
+    /// This method initiates flushing modified pages to durable storage, but it
+    /// will not wait for the operation to complete before returning. The file's
+    /// metadata (including last modification timestamp) may not be updated.
     pub fn flush_async(&mut self) -> Result<()> {
         let len = self.len();
         self.inner.flush_async(0, len)
@@ -165,24 +169,27 @@ impl Mmap {
     ///
     /// The offset and length must be in the bounds of the mmap.
     ///
-    /// When this returns with a non-error result, all outstanding changes to a file-backed memory
-    /// in the range are guaranteed to be durable stored. The file's metadata (including last
-    /// modification timestamp) may not be updated. It is not guaranteed the only the changes in
-    /// the specified range are flushed; other outstanding changes to the mmap may be flushed as
-    /// well.
+    /// When this returns with a non-error result, all outstanding changes to a
+    /// file-backed memory in the range are guaranteed to be durable stored. The
+    /// file's metadata (including last modification timestamp) may not be
+    /// updated. It is not guaranteed the only the changes in the specified
+    /// range are flushed; other outstanding changes to the mmap may be flushed
+    /// as well.
     pub fn flush_range(&mut self, offset: usize, len: usize) -> Result<()> {
         self.inner.flush(offset, len)
     }
 
-    /// Asynchronously flushes outstanding memory map modifications in the range to disk.
+    /// Asynchronously flushes outstanding memory map modifications in the range
+    /// to disk.
     ///
     /// The offset and length must be in the bounds of the mmap.
     ///
-    /// This method initiates flushing modified pages to durable storage, but it will not wait
-    /// for the operation to complete before returning. The file's metadata (including last
-    /// modification timestamp) may not be updated. It is not guaranteed that the only changes
-    /// flushed are those in the specified range; other outstanding changes to the mmap may be
-    /// flushed as well.
+    /// This method initiates flushing modified pages to durable storage, but it
+    /// will not wait for the operation to complete before returning. The file's
+    /// metadata (including last modification timestamp) may not be updated. It
+    /// is not guaranteed that the only changes flushed are those in the
+    /// specified range; other outstanding changes to the mmap may be flushed as
+    /// well.
     pub fn flush_async_range(&mut self, offset: usize, len: usize) -> Result<()> {
         self.inner.flush_async(offset, len)
     }
@@ -194,14 +201,16 @@ impl Mmap {
 
     /// Returns a pointer to the mapped memory.
     ///
-    /// See `Mmap::as_slice` for invariants that must hold when dereferencing the pointer.
+    /// See `Mmap::as_slice` for invariants that must hold when dereferencing
+    /// the pointer.
     pub fn ptr(&self) -> *const u8 {
         self.inner.ptr()
     }
 
     /// Returns a pointer to the mapped memory.
     ///
-    /// See `Mmap::as_mut_slice` for invariants that must hold when dereferencing the pointer.
+    /// See `Mmap::as_mut_slice` for invariants that must hold when
+    /// dereferencing the pointer.
     pub fn mut_ptr(&mut self) -> *mut u8 {
         self.inner.mut_ptr()
     }
@@ -261,7 +270,7 @@ impl MmapView {
     pub fn split_at(self, offset: usize) -> Result<(MmapView, MmapView)> {
         if self.len < offset {
             return Err(Error::new(ErrorKind::InvalidInput,
-                                      "mmap view split offset must be less than the view length"));
+                                  "mmap view split offset must be less than the view length"));
         }
         let MmapView { inner, offset: self_offset, len: self_len } = self;
         Ok((MmapView { inner: inner.clone(),
@@ -274,7 +283,8 @@ impl MmapView {
 
     /// Restricts the range of the view to the provided offset and length.
     ///
-    /// The provided range must be a subset of the current range (`offset + len < view.len()`).
+    /// The provided range must be a subset of the current range
+    /// (`offset + len < view.len()`).
     pub fn restrict(&mut self, offset: usize, len: usize) -> Result<()> {
         if offset + len > self.len {
             return Err(Error::new(ErrorKind::InvalidInput,
@@ -308,20 +318,21 @@ impl MmapView {
 
     /// Flushes outstanding view modifications to disk.
     ///
-    /// When this returns with a non-error result, all outstanding changes to a file-backed memory
-    /// map view are guaranteed to be durably stored. The file's metadata (including last
-    /// modification timestamp) may not be updated.
+    /// When this returns with a non-error result, all outstanding changes to a
+    /// file-backed memory map view are guaranteed to be durably stored. The
+    /// file's metadata (including last modification timestamp) may not be
+    /// updated.
     pub fn flush(&mut self) -> Result<()> {
         self.inner_mut().flush_range(self.offset, self.len)
     }
 
-    /// Asynchronously flushes outstanding memory map view modifications to disk.
+    /// Asynchronously flushes outstanding memory map view modifications to
+    /// disk.
     ///
-    /// This method initiates flushing modified pages to durable storage, but it will not wait
-    /// for the operation to complete before returning. The file's metadata (including last
-    /// modification timestamp) may not be updated.
+    /// This method initiates flushing modified pages to durable storage, but it
+    /// will not wait for the operation to complete before returning. The file's
+    /// metadata (including last modification timestamp) may not be updated.
     pub fn flush_async(&mut self) -> Result<()> {
-        // TODO: this should be restricted to flushing the view.
         self.inner_mut().flush_async_range(self.offset, self.len)
     }
 
@@ -330,16 +341,18 @@ impl MmapView {
         self.len
     }
 
-    /// Returns a pointer to the mapped mapped.
+    /// Returns a shared pointer to the mapped memory.
     ///
-    /// See `Mmap::as_slice` for invariants that must hold when dereferencing the pointer.
+    /// See `Mmap::as_slice` for invariants that must hold when dereferencing
+    /// the pointer.
     pub fn ptr(&self) -> *const u8 {
         unsafe { self.inner().ptr().offset(self.offset as isize) }
     }
 
-    /// Returns a pointer to the mapped memory.
+    /// Returns a mutable pointer to the mapped memory.
     ///
-    /// See `Mmap::as_mut_slice` for invariants that must hold when dereferencing the pointer.
+    /// See `Mmap::as_mut_slice` for invariants that must hold when
+    /// dereferencing the pointer.
     pub fn mut_ptr(&mut self) -> *mut u8 {
         unsafe { self.inner_mut().mut_ptr().offset(self.offset as isize) }
     }
@@ -432,8 +445,7 @@ impl MmapViewSync {
     /// map view are guaranteed to be durably stored. The file's metadata (including last
     /// modification timestamp) may not be updated.
     pub fn flush(&mut self) -> Result<()> {
-        // TODO: this should be restricted to flushing the view.
-        self.inner_mut().flush()
+        self.inner_mut().flush_range(self.offset, self.len)
     }
 
     /// Asynchronously flushes outstanding memory map view modifications to disk.
@@ -442,8 +454,7 @@ impl MmapViewSync {
     /// for the operation to complete before returning. The file's metadata (including last
     /// modification timestamp) may not be updated.
     pub fn flush_async(&mut self) -> Result<()> {
-        // TODO: this should be restricted to flushing the view.
-        self.inner_mut().flush_async()
+        self.inner_mut().flush_async_range(self.offset, self.len)
     }
 
     /// Returns the length of the memory map view.
@@ -451,14 +462,14 @@ impl MmapViewSync {
         self.len
     }
 
-    /// Returns a pointer to the mapped mapped.
+    /// Returns a shared pointer to the mapped memory.
     ///
     /// See `Mmap::as_slice` for invariants that must hold when dereferencing the pointer.
     pub fn ptr(&self) -> *const u8 {
         unsafe { self.inner().ptr().offset(self.offset as isize) }
     }
 
-    /// Returns a pointer to the mapped memory.
+    /// Returns a mutable pointer to the mapped memory.
     ///
     /// See `Mmap::as_mut_slice` for invariants that must hold when dereferencing the pointer.
     pub fn mut_ptr(&mut self) -> *mut u8 {
