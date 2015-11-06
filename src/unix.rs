@@ -27,10 +27,20 @@ impl Protection {
     }
 }
 
+#[cfg(any(all(target_os = "linux", not(target_arch="mips")),
+          target_os = "freebsd",
+          target_os = "android"))]
+const MAP_STACK: libc::c_int = libc::MAP_STACK;
+
+#[cfg(not(any(all(target_os = "linux", not(target_arch="mips")),
+              target_os = "freebsd",
+              target_os = "android")))]
+const MAP_STACK: libc::c_int = 0;
+
 impl MmapOptions {
     fn as_flag(self) -> libc::c_int {
         let mut flag = 0;
-        if self.stack { flag |= libc::MAP_STACK }
+        if self.stack { flag |= MAP_STACK }
         flag
     }
 }
