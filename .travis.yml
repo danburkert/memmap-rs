@@ -1,25 +1,55 @@
 language: rust
-addons:
-  apt:
-    packages:
-    - libcurl4-openssl-dev
-    - libelf-dev
-    - libdw-dev
+sudo: required
 rust:
-- nightly
-- beta
-- stable
-
-before_script:
-- pip install 'travis-cargo<0.2' --user && export PATH=$HOME/.local/bin:$PATH
-
+  - 1.1.0
+  - nightly
+services:
+  - docker
 script:
-- travis-cargo build && travis-cargo test && travis-cargo --only nightly doc
-
-after_success:
-- travis-cargo --only nightly doc-upload
-
+  - if [[ $TRAVIS_RUST_VERSION = nightly* ]]; then
+      sh ci/run-travis.sh;
+    else
+      cargo test;
+    fi
 env:
+  matrix:
+    - ARCH=x86_64
+    - ARCH=i686
   global:
-  - TRAVIS_CARGO_NIGHTLY_FEATURE=''
-  - secure: kbT+9jjq/649OlgmEGi7Q3RTqUWSBBgy5AlcGUuZYzw8ebhxkmVY4LWSjWd++E4J5XELz2zxRdGTf2cGo++Bc6nohCBVKln8G3dFg+1pWPGYHKVfhFn12iDJs9LX1TZAio76dXF2bUZDQLm9D50dQmK1De7vfjndmnncOA8/Y8M=
+    secure: kbT+9jjq/649OlgmEGi7Q3RTqUWSBBgy5AlcGUuZYzw8ebhxkmVY4LWSjWd++E4J5XELz2zxRdGTf2cGo++Bc6nohCBVKln8G3dFg+1pWPGYHKVfhFn12iDJs9LX1TZAio76dXF2bUZDQLm9D50dQmK1De7vfjndmnncOA8/Y8M=
+os:
+  - linux
+  - osx
+matrix:
+  include:
+    - os: linux
+      env: TARGET=arm-linux-androideabi
+      rust: nightly
+    - os: linux
+      env: TARGET=x86_64-unknown-linux-musl
+      rust: nightly
+    - os: linux
+      env: TARGET=arm-unknown-linux-gnueabihf
+      rust: nightly
+    - os: linux
+      env: TARGET=mips-unknown-linux-gnu
+      rust: nightly
+    - os: linux
+      env: TARGET=aarch64-unknown-linux-gnu
+      rust: nightly
+    - os: osx
+      env: TARGET=i386-apple-ios
+      rust: nightly-2015-09-08
+    - os: osx
+      env: TARGET=x86_64-apple-ios
+      rust: nightly-2015-09-08
+  allow_failures:
+    # QEMU is extremely flaky
+    - env: TARGET=aarch64-unknown-linux-gnu
+    - env: TARGET=arm-unknown-linux-gnueabihf
+    - env: TARGET=mips-unknown-linux-gnu
+    # Remove once libc#d7d4f is published
+    - env: TARGET=arm-linux-androideabi
+notifications:
+  email:
+    on_success: never
