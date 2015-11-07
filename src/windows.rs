@@ -134,7 +134,7 @@ impl Drop for MmapInner {
     fn drop(&mut self) {
         let alignment = self.ptr as usize % allocation_granularity();
         unsafe {
-            let ptr = self.ptr.offset(0usize.wrapping_sub(alignment) as isize);
+            let ptr = self.ptr.offset(- (alignment as isize));
             assert!(kernel32::UnmapViewOfFile(ptr) != 0,
                     "unable to unmap mmap: {}", io::Error::last_os_error());
         }

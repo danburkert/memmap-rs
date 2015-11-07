@@ -56,6 +56,11 @@ impl MmapInner {
         let alignment = offset % page_size();
         let aligned_offset = offset - alignment;
         let aligned_len = len + alignment;
+        if aligned_len == 0 {
+            // Normally the OS would catch this, but it segfaults under QEMU.
+            return Err(io::Error::new(io::ErrorKind::InvalidInput,
+                                      "memory map must have a non-zero length"));
+        }
 
         unsafe {
             let ptr = libc::mmap(ptr::null_mut(),
@@ -142,7 +147,7 @@ impl Drop for MmapInner {
     fn drop(&mut self) {
         let alignment = self.ptr as usize % page_size();
         unsafe {
-            assert!(libc::munmap(self.ptr.offset(0usize.wrapping_sub(alignment) as isize),
+            assert!(libc::munmap(self.ptr.offset(- (alignment as isize)),
                                  (self.len + alignment) as libc::size_t) == 0,
                     "unable to unmap mmap: {}", io::Error::last_os_error());
         }
