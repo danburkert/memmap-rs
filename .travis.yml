@@ -50,6 +50,8 @@ matrix:
     - env: TARGET=mips-unknown-linux-gnu
     # Remove once libc#d7d4f is published
     - env: TARGET=arm-linux-androideabi
+    # Breaking on the new travis GCE infrastructure?
+    - env: TARGET=x86_64-unknown-linux-musl
 notifications:
   email:
     on_success: never
