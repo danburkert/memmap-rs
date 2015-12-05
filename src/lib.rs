@@ -374,6 +374,18 @@ impl MmapView {
     pub unsafe fn as_mut_slice(&mut self) -> &mut [u8] {
         &mut self.inner_mut().as_mut_slice()[self.offset..self.offset + self.len]
     }
+
+    /// Clones the view of the memory map.
+    ///
+    /// The underlying memory map is shared, and thus the caller must ensure that the memory
+    /// underlying the view is not illegally aliased.
+    pub unsafe fn clone(&self) -> MmapView {
+        MmapView {
+            inner: self.inner.clone(),
+            offset: self.offset,
+            len: self.len,
+        }
+    }
 }
 
 /// A thread-safe view of a memory map.
@@ -492,6 +504,18 @@ impl MmapViewSync {
     /// The caller must ensure that the file is not concurrently accessed.
     pub unsafe fn as_mut_slice(&mut self) -> &mut [u8] {
         &mut self.inner_mut().as_mut_slice()[self.offset..self.offset + self.len]
+    }
+
+    /// Clones the view of the memory map.
+    ///
+    /// The underlying memory map is shared, and thus the caller must ensure that the memory
+    /// underlying the view is not illegally aliased.
+    pub unsafe fn clone(&self) -> MmapViewSync {
+        MmapViewSync {
+            inner: self.inner.clone(),
+            offset: self.offset,
+            len: self.len,
+        }
     }
 }
 
