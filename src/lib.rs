@@ -13,6 +13,7 @@ mod unix;
 use unix::MmapInner;
 
 use std::cell::UnsafeCell;
+use std::fmt;
 use std::fs::{self, File};
 use std::io::{Error, ErrorKind, Result};
 use std::path::Path;
@@ -250,12 +251,16 @@ impl Mmap {
     }
 }
 
+impl fmt::Debug for Mmap {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Mmap {{ ptr: {:?}, len: {} }}", self.ptr(), self.len())
+    }
+}
+
 /// A view of a memory map.
 ///
 /// The view may be split into disjoint ranges, each of which will share the
 /// underlying memory map.
-///
-/// A mmap view is not cloneable.
 pub struct MmapView {
     inner: Rc<UnsafeCell<Mmap>>,
     offset: usize,
@@ -388,12 +393,17 @@ impl MmapView {
     }
 }
 
+impl fmt::Debug for MmapView {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "MmapView {{ ptr: {:?}, offset: {}, len: {} }}",
+               self.inner().ptr(), self.offset, self.len)
+    }
+}
+
 /// A thread-safe view of a memory map.
 ///
 /// The view may be split into disjoint ranges, each of which will share the
 /// underlying memory map.
-///
-/// A mmap view is not cloneable.
 pub struct MmapViewSync {
     inner: Arc<UnsafeCell<Mmap>>,
     offset: usize,
@@ -516,6 +526,13 @@ impl MmapViewSync {
             offset: self.offset,
             len: self.len,
         }
+    }
+}
+
+impl fmt::Debug for MmapViewSync {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "MmapViewSync {{ ptr: {:?}, offset: {}, len: {} }}",
+               self.inner().ptr(), self.offset, self.len)
     }
 }
 
