@@ -102,7 +102,7 @@ impl MmapInner {
         }
     }
 
-    pub fn flush(&mut self, offset: usize, len: usize) -> io::Result<()> {
+    pub fn flush(&self, offset: usize, len: usize) -> io::Result<()> {
         let alignment = (self.ptr as usize + offset) % page_size();
         let offset = offset as isize - alignment as isize;
         let len = len + alignment;
@@ -116,7 +116,7 @@ impl MmapInner {
         }
     }
 
-    pub fn flush_async(&mut self, offset: usize, len: usize) -> io::Result<()> {
+    pub fn flush_async(&self, offset: usize, len: usize) -> io::Result<()> {
         let alignment = offset % page_size();
         let aligned_offset = offset - alignment;
         let aligned_len = len + alignment;

@@ -151,7 +151,7 @@ impl Mmap {
     /// When this returns with a non-error result, all outstanding changes to a
     /// file-backed memory map are guaranteed to be durably stored. The file's
     /// metadata (including last modification timestamp) may not be updated.
-    pub fn flush(&mut self) -> Result<()> {
+    pub fn flush(&self) -> Result<()> {
         let len = self.len();
         self.inner.flush(0, len)
     }
@@ -161,7 +161,7 @@ impl Mmap {
     /// This method initiates flushing modified pages to durable storage, but it
     /// will not wait for the operation to complete before returning. The file's
     /// metadata (including last modification timestamp) may not be updated.
-    pub fn flush_async(&mut self) -> Result<()> {
+    pub fn flush_async(&self) -> Result<()> {
         let len = self.len();
         self.inner.flush_async(0, len)
     }
@@ -176,7 +176,7 @@ impl Mmap {
     /// updated. It is not guaranteed the only the changes in the specified
     /// range are flushed; other outstanding changes to the mmap may be flushed
     /// as well.
-    pub fn flush_range(&mut self, offset: usize, len: usize) -> Result<()> {
+    pub fn flush_range(&self, offset: usize, len: usize) -> Result<()> {
         self.inner.flush(offset, len)
     }
 
@@ -191,7 +191,7 @@ impl Mmap {
     /// is not guaranteed that the only changes flushed are those in the
     /// specified range; other outstanding changes to the mmap may be flushed as
     /// well.
-    pub fn flush_async_range(&mut self, offset: usize, len: usize) -> Result<()> {
+    pub fn flush_async_range(&self, offset: usize, len: usize) -> Result<()> {
         self.inner.flush_async(offset, len)
     }
 
@@ -327,7 +327,7 @@ impl MmapView {
     /// file-backed memory map view are guaranteed to be durably stored. The
     /// file's metadata (including last modification timestamp) may not be
     /// updated.
-    pub fn flush(&mut self) -> Result<()> {
+    pub fn flush(&self) -> Result<()> {
         self.inner_mut().flush_range(self.offset, self.len)
     }
 
@@ -337,7 +337,7 @@ impl MmapView {
     /// This method initiates flushing modified pages to durable storage, but it
     /// will not wait for the operation to complete before returning. The file's
     /// metadata (including last modification timestamp) may not be updated.
-    pub fn flush_async(&mut self) -> Result<()> {
+    pub fn flush_async(&self) -> Result<()> {
         self.inner_mut().flush_async_range(self.offset, self.len)
     }
 
@@ -466,7 +466,7 @@ impl MmapViewSync {
     /// When this returns with a non-error result, all outstanding changes to a file-backed memory
     /// map view are guaranteed to be durably stored. The file's metadata (including last
     /// modification timestamp) may not be updated.
-    pub fn flush(&mut self) -> Result<()> {
+    pub fn flush(&self) -> Result<()> {
         self.inner_mut().flush_range(self.offset, self.len)
     }
 
@@ -475,7 +475,7 @@ impl MmapViewSync {
     /// This method initiates flushing modified pages to durable storage, but it will not wait
     /// for the operation to complete before returning. The file's metadata (including last
     /// modification timestamp) may not be updated.
-    pub fn flush_async(&mut self) -> Result<()> {
+    pub fn flush_async(&self) -> Result<()> {
         self.inner_mut().flush_async_range(self.offset, self.len)
     }
 

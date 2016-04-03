@@ -102,12 +102,12 @@ impl MmapInner {
         }
     }
 
-    pub fn flush(&mut self, offset: usize, len: usize) -> io::Result<()> {
+    pub fn flush(&self, offset: usize, len: usize) -> io::Result<()> {
         try!(self.flush_async(offset, len));
-        if let Some(ref mut file) = self.file { file.sync_data() } else { Ok(()) }
+        if let Some(ref file) = self.file { file.sync_data() } else { Ok(()) }
     }
 
-    pub fn flush_async(&mut self, offset: usize, len: usize) -> io::Result<()> {
+    pub fn flush_async(&self, offset: usize, len: usize) -> io::Result<()> {
         let result = unsafe { kernel32::FlushViewOfFile(self.ptr.offset(offset as isize),
                                                         len as winapi::SIZE_T) };
         if result != 0 {
