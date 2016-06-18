@@ -15,6 +15,7 @@ impl Protection {
             Protection::Read => libc::PROT_READ,
             Protection::ReadWrite => libc::PROT_READ | libc::PROT_WRITE,
             Protection::ReadCopy => libc::PROT_READ | libc::PROT_WRITE,
+            Protection::ReadExecute => libc::PROT_READ | libc::PROT_EXEC,
         }
     }
 
@@ -23,6 +24,7 @@ impl Protection {
             Protection::Read => libc::MAP_SHARED,
             Protection::ReadWrite => libc::MAP_SHARED,
             Protection::ReadCopy => libc::MAP_PRIVATE,
+            Protection::ReadExecute => libc::MAP_SHARED,
         }
     }
 }
@@ -123,6 +125,18 @@ impl MmapInner {
         let result = unsafe { libc::msync(self.ptr.offset(aligned_offset as isize),
                                           aligned_len as libc::size_t,
                                           libc::MS_ASYNC) };
+        if result == 0 {
+            Ok(())
+        } else {
+            Err(io::Error::last_os_error())
+        }
+    }
+
+    pub fn set_protection(&mut self, prot: Protection) -> io::Result<()> {
+        let result = unsafe { libc::mprotect(self.ptr,
+                                             self.len,
+                                             prot.as_prot()) };
+
         if result == 0 {
             Ok(())
         } else {

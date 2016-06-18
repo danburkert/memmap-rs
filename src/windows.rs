@@ -20,6 +20,7 @@ impl Protection {
             Protection::Read => winapi::PAGE_READONLY,
             Protection::ReadWrite => winapi::PAGE_READWRITE,
             Protection::ReadCopy => winapi::PAGE_READONLY,
+            Protection::ReadExecute => winapi::PAGE_EXECUTE_READ,
         }
     }
 
@@ -29,6 +30,7 @@ impl Protection {
             Protection::Read => winapi::FILE_MAP_READ,
             Protection::ReadWrite => winapi::FILE_MAP_ALL_ACCESS,
             Protection::ReadCopy => winapi::FILE_MAP_COPY,
+            Protection::ReadExecute => winapi::FILE_MAP_READ | winapi::FILE_MAP_EXECUTE,
         }
     }
 }
@@ -80,24 +82,36 @@ impl MmapInner {
         unsafe {
             let handle = kernel32::CreateFileMappingW(winapi::INVALID_HANDLE_VALUE,
                                                       ptr::null_mut(),
-                                                      prot.as_mapping_flag(),
+                                                      winapi::PAGE_EXECUTE_READWRITE,
                                                       (len >> 16 >> 16) as winapi::DWORD,
                                                       (len & 0xffffffff) as winapi::DWORD,
                                                       ptr::null());
             if handle == ptr::null_mut() {
                 return Err(io::Error::last_os_error());
             }
-            let ptr = kernel32::MapViewOfFile(handle, prot.as_view_flag(), 0, 0, len as winapi::SIZE_T);
+            let ptr = kernel32::MapViewOfFile(
+                handle,
+                winapi::FILE_MAP_ALL_ACCESS | winapi::FILE_MAP_EXECUTE,
+                0, 0, len as winapi::SIZE_T);
             kernel32::CloseHandle(handle);
 
             if ptr == ptr::null_mut() {
-                Err(io::Error::last_os_error())
-            } else {
+                return Err(io::Error::last_os_error());
+            }
+
+            let mut old = 0;
+            let result = kernel32::VirtualProtect(ptr,
+                                                  len as winapi::SIZE_T,
+                                                  prot.as_mapping_flag(),
+                                                  &mut old);
+            if result != 0 {
                 Ok(MmapInner {
                     file: None,
                     ptr: ptr,
                     len: len as usize,
                 })
+            } else {
+                Err(io::Error::last_os_error())
             }
         }
     }
@@ -110,6 +124,20 @@ impl MmapInner {
     pub fn flush_async(&self, offset: usize, len: usize) -> io::Result<()> {
         let result = unsafe { kernel32::FlushViewOfFile(self.ptr.offset(offset as isize),
                                                         len as winapi::SIZE_T) };
+        if result != 0 {
+            Ok(())
+        } else {
+            Err(io::Error::last_os_error())
+        }
+    }
+
+    pub fn set_protection(&mut self, prot: Protection) -> io::Result<()> {
+        let mut old = 0;
+        let result = unsafe { kernel32::VirtualProtect(self.ptr,
+                                                       self.len as winapi::SIZE_T,
+                                                       prot.as_mapping_flag(),
+                                                       &mut old) };
+
         if result != 0 {
             Ok(())
         } else {
