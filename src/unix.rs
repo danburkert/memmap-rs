@@ -133,14 +133,18 @@ impl MmapInner {
     }
 
     pub fn set_protection(&mut self, prot: Protection) -> io::Result<()> {
-        let result = unsafe { libc::mprotect(self.ptr,
-                                             self.len,
-                                             prot.as_prot()) };
-
-        if result == 0 {
-            Ok(())
-        } else {
-            Err(io::Error::last_os_error())
+        unsafe {
+            let alignment = self.ptr as usize % page_size();
+            let ptr = self.ptr.offset(- (alignment as isize));
+            let len = self.len + alignment;
+            let result = libc::mprotect(ptr,
+                                        len,
+                                        prot.as_prot());
+            if result == 0 {
+                Ok(())
+            } else {
+                Err(io::Error::last_os_error())
+            }
         }
     }
 

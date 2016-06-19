@@ -80,6 +80,11 @@ impl MmapInner {
 
     pub fn anonymous(len: usize, prot: Protection, _options: MmapOptions) -> io::Result<MmapInner> {
         unsafe {
+            // Create a mapping and view with maximum access permissions, then use `VirtualProtect`
+            // to set the actual `Protection`. This way, we can set more permissive protection later
+            // on.
+            // Also see https://msdn.microsoft.com/en-us/library/windows/desktop/aa366537.aspx
+
             let handle = kernel32::CreateFileMappingW(winapi::INVALID_HANDLE_VALUE,
                                                       ptr::null_mut(),
                                                       winapi::PAGE_EXECUTE_READWRITE,
@@ -89,10 +94,12 @@ impl MmapInner {
             if handle == ptr::null_mut() {
                 return Err(io::Error::last_os_error());
             }
-            let ptr = kernel32::MapViewOfFile(
-                handle,
-                winapi::FILE_MAP_ALL_ACCESS | winapi::FILE_MAP_EXECUTE,
-                0, 0, len as winapi::SIZE_T);
+            let access = winapi::FILE_MAP_ALL_ACCESS | winapi::FILE_MAP_EXECUTE;
+            let ptr = kernel32::MapViewOfFile(handle,
+                                              access,
+                                              0,
+                                              0,
+                                              len as winapi::SIZE_T);
             kernel32::CloseHandle(handle);
 
             if ptr == ptr::null_mut() {
@@ -132,16 +139,21 @@ impl MmapInner {
     }
 
     pub fn set_protection(&mut self, prot: Protection) -> io::Result<()> {
-        let mut old = 0;
-        let result = unsafe { kernel32::VirtualProtect(self.ptr,
-                                                       self.len as winapi::SIZE_T,
-                                                       prot.as_mapping_flag(),
-                                                       &mut old) };
+        unsafe {
+            let alignment = self.ptr as usize % allocation_granularity();
+            let ptr = self.ptr.offset(- (alignment as isize));
 
-        if result != 0 {
-            Ok(())
-        } else {
-            Err(io::Error::last_os_error())
+            let mut old = 0;
+            let result = kernel32::VirtualProtect(ptr,
+                                                  self.len as winapi::SIZE_T,
+                                                  prot.as_mapping_flag(),
+                                                  &mut old);
+
+            if result != 0 {
+                Ok(())
+            } else {
+                Err(io::Error::last_os_error())
+            }
         }
     }
 
