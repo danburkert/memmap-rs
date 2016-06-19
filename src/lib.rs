@@ -882,4 +882,43 @@ mod test {
         let jitfn: extern "C" fn() -> u8 = unsafe { mem::transmute(map.mut_ptr()) };
         assert_eq!(jitfn(), 0xab);
     }
+
+    #[test]
+    fn offset_set_protection() {
+        let tempdir = tempdir::TempDir::new("mmap").unwrap();
+        let path = tempdir.path().join("mmap");
+
+        let file = fs::OpenOptions::new()
+                                   .read(true)
+                                   .write(true)
+                                   .create(true)
+                                   .open(&path)
+                                   .unwrap();
+
+        file.set_len(500000 as u64).unwrap();
+
+        let offset = 5099;
+        let len = 50050;
+
+        let mut mmap = Mmap::open_with_offset(&file,
+                                              Protection::ReadWrite,
+                                              offset,
+                                              len).unwrap();
+        assert_eq!(len, mmap.len());
+
+        let zeros = iter::repeat(0).take(len).collect::<Vec<_>>();
+        let incr = (0..len).map(|n| n as u8).collect::<Vec<_>>();
+
+        // check that the mmap is empty
+        assert_eq!(&zeros[..], unsafe { mmap.as_slice() });
+
+        // write values into the mmap
+        unsafe { mmap.as_mut_slice() }.write_all(&incr[..]).unwrap();
+
+        // change to read-only protection
+        mmap.set_protection(Protection::Read).unwrap();
+
+        // read values back
+        assert_eq!(&incr[..], unsafe { mmap.as_slice() });
+    }
 }
