@@ -142,10 +142,11 @@ impl MmapInner {
         unsafe {
             let alignment = self.ptr as usize % allocation_granularity();
             let ptr = self.ptr.offset(- (alignment as isize));
+            let aligned_len = self.len as winapi::SIZE_T + alignment as winapi::SIZE_T;
 
             let mut old = 0;
             let result = kernel32::VirtualProtect(ptr,
-                                                  self.len as winapi::SIZE_T,
+                                                  aligned_len,
                                                   prot.as_mapping_flag(),
                                                   &mut old);
 
