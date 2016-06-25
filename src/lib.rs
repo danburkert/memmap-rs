@@ -41,6 +41,9 @@ pub enum Protection {
     /// changes made to the file after the memory map is created will be
     /// visible.
     ReadCopy,
+
+    /// A readable and executable mapping.
+    ReadExecute,
 }
 
 impl Protection {
@@ -193,6 +196,14 @@ impl Mmap {
     /// well.
     pub fn flush_async_range(&self, offset: usize, len: usize) -> Result<()> {
         self.inner.flush_async(offset, len)
+    }
+
+    /// Change the `Protection` this mapping was created with.
+    ///
+    /// If you create a read-only file-backed mapping, you can **not** use this method to make the
+    /// mapping writeable. Remap the file instead.
+    pub fn set_protection(&mut self, prot: Protection) -> Result<()> {
+        self.inner.set_protection(prot)
     }
 
     /// Returns the length of the memory map.
@@ -547,6 +558,7 @@ mod test {
     use std::io::{Read, Write};
     use std::thread;
     use std::sync::Arc;
+    use std::ptr;
 
     use super::*;
 
@@ -833,5 +845,80 @@ mod test {
                 view.as_slice();
             }
         });
+    }
+
+    #[test]
+    fn set_prot() {
+        let mut map = Mmap::anonymous(1, Protection::Read).unwrap();
+        map.set_protection(Protection::ReadWrite).unwrap();
+
+        // We should now be able to write to the memory. If not this will cause a SIGSEGV.
+        unsafe { ptr::write(map.mut_ptr(), 0xf1); }
+
+        map.set_protection(Protection::Read).unwrap();
+
+        assert_eq!(unsafe { ptr::read(map.mut_ptr()) }, 0xf1);
+    }
+
+    #[test]
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    fn jit_x86() {
+        use std::mem;
+
+        let mut map = Mmap::anonymous(4096, Protection::ReadWrite).unwrap();
+
+        {
+            let mut jitmem = unsafe { map.as_mut_slice() };
+            jitmem[0] = 0xB8;   // mov eax, 0xAB
+            jitmem[1] = 0xAB;
+            jitmem[2] = 0x00;
+            jitmem[3] = 0x00;
+            jitmem[4] = 0x00;
+            jitmem[5] = 0xC3;   // ret
+        }
+
+        map.set_protection(Protection::ReadExecute).unwrap();
+
+        let jitfn: extern "C" fn() -> u8 = unsafe { mem::transmute(map.mut_ptr()) };
+        assert_eq!(jitfn(), 0xab);
+    }
+
+    #[test]
+    fn offset_set_protection() {
+        let tempdir = tempdir::TempDir::new("mmap").unwrap();
+        let path = tempdir.path().join("mmap");
+
+        let file = fs::OpenOptions::new()
+                                   .read(true)
+                                   .write(true)
+                                   .create(true)
+                                   .open(&path)
+                                   .unwrap();
+
+        file.set_len(500000 as u64).unwrap();
+
+        let offset = 5099;
+        let len = 50050;
+
+        let mut mmap = Mmap::open_with_offset(&file,
+                                              Protection::ReadWrite,
+                                              offset,
+                                              len).unwrap();
+        assert_eq!(len, mmap.len());
+
+        let zeros = iter::repeat(0).take(len).collect::<Vec<_>>();
+        let incr = (0..len).map(|n| n as u8).collect::<Vec<_>>();
+
+        // check that the mmap is empty
+        assert_eq!(&zeros[..], unsafe { mmap.as_slice() });
+
+        // write values into the mmap
+        unsafe { mmap.as_mut_slice() }.write_all(&incr[..]).unwrap();
+
+        // change to read-only protection
+        mmap.set_protection(Protection::Read).unwrap();
+
+        // read values back
+        assert_eq!(&incr[..], unsafe { mmap.as_slice() });
     }
 }

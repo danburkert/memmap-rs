@@ -20,6 +20,7 @@ impl Protection {
             Protection::Read => winapi::PAGE_READONLY,
             Protection::ReadWrite => winapi::PAGE_READWRITE,
             Protection::ReadCopy => winapi::PAGE_READONLY,
+            Protection::ReadExecute => winapi::PAGE_EXECUTE_READ,
         }
     }
 
@@ -29,6 +30,7 @@ impl Protection {
             Protection::Read => winapi::FILE_MAP_READ,
             Protection::ReadWrite => winapi::FILE_MAP_ALL_ACCESS,
             Protection::ReadCopy => winapi::FILE_MAP_COPY,
+            Protection::ReadExecute => winapi::FILE_MAP_READ | winapi::FILE_MAP_EXECUTE,
         }
     }
 }
@@ -78,26 +80,45 @@ impl MmapInner {
 
     pub fn anonymous(len: usize, prot: Protection, _options: MmapOptions) -> io::Result<MmapInner> {
         unsafe {
+            // Create a mapping and view with maximum access permissions, then use `VirtualProtect`
+            // to set the actual `Protection`. This way, we can set more permissive protection later
+            // on.
+            // Also see https://msdn.microsoft.com/en-us/library/windows/desktop/aa366537.aspx
+
             let handle = kernel32::CreateFileMappingW(winapi::INVALID_HANDLE_VALUE,
                                                       ptr::null_mut(),
-                                                      prot.as_mapping_flag(),
+                                                      winapi::PAGE_EXECUTE_READWRITE,
                                                       (len >> 16 >> 16) as winapi::DWORD,
                                                       (len & 0xffffffff) as winapi::DWORD,
                                                       ptr::null());
             if handle == ptr::null_mut() {
                 return Err(io::Error::last_os_error());
             }
-            let ptr = kernel32::MapViewOfFile(handle, prot.as_view_flag(), 0, 0, len as winapi::SIZE_T);
+            let access = winapi::FILE_MAP_ALL_ACCESS | winapi::FILE_MAP_EXECUTE;
+            let ptr = kernel32::MapViewOfFile(handle,
+                                              access,
+                                              0,
+                                              0,
+                                              len as winapi::SIZE_T);
             kernel32::CloseHandle(handle);
 
             if ptr == ptr::null_mut() {
-                Err(io::Error::last_os_error())
-            } else {
+                return Err(io::Error::last_os_error());
+            }
+
+            let mut old = 0;
+            let result = kernel32::VirtualProtect(ptr,
+                                                  len as winapi::SIZE_T,
+                                                  prot.as_mapping_flag(),
+                                                  &mut old);
+            if result != 0 {
                 Ok(MmapInner {
                     file: None,
                     ptr: ptr,
                     len: len as usize,
                 })
+            } else {
+                Err(io::Error::last_os_error())
             }
         }
     }
@@ -114,6 +135,26 @@ impl MmapInner {
             Ok(())
         } else {
             Err(io::Error::last_os_error())
+        }
+    }
+
+    pub fn set_protection(&mut self, prot: Protection) -> io::Result<()> {
+        unsafe {
+            let alignment = self.ptr as usize % allocation_granularity();
+            let ptr = self.ptr.offset(- (alignment as isize));
+            let aligned_len = self.len as winapi::SIZE_T + alignment as winapi::SIZE_T;
+
+            let mut old = 0;
+            let result = kernel32::VirtualProtect(ptr,
+                                                  aligned_len,
+                                                  prot.as_mapping_flag(),
+                                                  &mut old);
+
+            if result != 0 {
+                Ok(())
+            } else {
+                Err(io::Error::last_os_error())
+            }
         }
     }
 
