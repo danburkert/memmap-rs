@@ -16,6 +16,7 @@ stable 1.1 or greater.
 - [x] copy-on-write memory maps
 - [x] read-only memory maps
 - [x] stack support (`MAP_STACK` on unix)
+- [x] executable memory maps
 - [ ] huge page support
 
 ## Platforms
