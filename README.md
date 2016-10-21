@@ -1,7 +1,7 @@
 # memmap
 
 A Rust library for cross-platform memory-mapped file IO. `memmap` requires Rust
-stable 1.1 or greater.
+stable 1.8 or greater.
 
 [Documentation](https://danburkert.github.io/memmap-rs/memmap/index.html)
 

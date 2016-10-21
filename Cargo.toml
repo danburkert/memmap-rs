@@ -1,6 +1,6 @@
 [package]
 name = "memmap"
-version = "0.4.0"
+version = "0.5.0"
 authors = ["Dan Burkert <dan@danburkert.com>"]
 license = "MIT/Apache-2.0"
 repository = "https://github.com/danburkert/memmap-rs"
@@ -9,10 +9,12 @@ description = "Cross-platform Rust API for memory-mapped file IO"
 keywords = ["mmap", "memory-map", "io", "file"]
 
 [dependencies]
+libc = "0.2"
+
+[target.'cfg(windows)'.dependencies]
+winapi = "0.2"
 fs2 = "0.2"
 kernel32-sys = "0.2"
-libc = "0.2"
-winapi = "0.2"
 
 [dev-dependencies]
 tempdir = "0.3"
