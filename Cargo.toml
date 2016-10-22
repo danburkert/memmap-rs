@@ -8,11 +8,13 @@ documentation = "https://danburkert.github.io/memmap-rs/memmap/index.html"
 description = "Cross-platform Rust API for memory-mapped file IO"
 keywords = ["mmap", "memory-map", "io", "file"]
 
-[dependencies]
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[target.'cfg(windows)'.dependencies]
+winapi = "0.2"
 fs2 = "0.2"
 kernel32-sys = "0.2"
-libc = "0.2"
-winapi = "0.2"
 
 [dev-dependencies]
 tempdir = "0.3"
