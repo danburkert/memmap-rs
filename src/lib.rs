@@ -20,6 +20,7 @@ use std::path::Path;
 use std::rc::Rc;
 use std::slice;
 use std::sync::Arc;
+use std::usize;
 
 /// Memory map protection.
 ///
@@ -107,8 +108,12 @@ impl Mmap {
     /// The file must be opened with read permissions, and write permissions if
     /// the supplied protection is `ReadWrite`. The file must not be empty.
     pub fn open(file: &File, prot: Protection) -> Result<Mmap> {
-        let len = try!(file.metadata()).len() as usize;
-        MmapInner::open(file, prot, 0, len).map(|inner| Mmap { inner: inner })
+        let len = try!(file.metadata()).len();
+        if len > usize::MAX as u64 {
+            return Err(Error::new(ErrorKind::InvalidData,
+                                  "file length overflows usize"));
+        }
+        MmapInner::open(file, prot, 0, len as usize).map(|inner| Mmap { inner: inner })
     }
 
     /// Opens a file-backed memory map.
@@ -117,8 +122,12 @@ impl Mmap {
     pub fn open_path<P>(path: P, prot: Protection) -> Result<Mmap>
     where P: AsRef<Path> {
         let file = try!(prot.as_open_options().open(path));
-        let len = try!(file.metadata()).len() as usize;
-        MmapInner::open(&file, prot, 0, len).map(|inner| Mmap { inner: inner })
+        let len = try!(file.metadata()).len();
+        if len > usize::MAX as u64 {
+            return Err(Error::new(ErrorKind::InvalidData,
+                                  "file length overflows usize"));
+        }
+        MmapInner::open(&file, prot, 0, len as usize).map(|inner| Mmap { inner: inner })
     }
 
     /// Opens a file-backed memory map with the specified offset and length.
