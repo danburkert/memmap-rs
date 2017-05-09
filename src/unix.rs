@@ -83,6 +83,12 @@ impl MmapInner {
         }
     }
 
+    /// Check if a file needs to be writable for copy-on-write mode.
+    #[inline]
+    pub fn needs_write_for_copy() -> bool {
+        false
+    }
+
     /// Open an anonymous memory map.
     pub fn anonymous(len: usize, prot: Protection, options: MmapOptions) -> io::Result<MmapInner> {
         let ptr = unsafe {
