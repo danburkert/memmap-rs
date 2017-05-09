@@ -52,7 +52,8 @@ impl Protection {
     fn as_open_options(self) -> fs::OpenOptions {
         let mut options = fs::OpenOptions::new();
         options.read(true)
-               .write(self.write());
+               .write(self == Protection::ReadWrite ||
+                      (self == Protection::ReadCopy && MmapInner::needs_write_for_copy()));
 
         options
     }
