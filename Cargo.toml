@@ -8,6 +8,10 @@ documentation = "https://docs.rs/memmap"
 description = "Cross-platform Rust API for memory-mapped file IO"
 keywords = ["mmap", "memory-map", "io", "file"]
 
+[badges]
+travis-ci = { repository = "danburkert/memmap-rs" }
+appveyor = { repository = "danburkert/mmap" }
+
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
 
