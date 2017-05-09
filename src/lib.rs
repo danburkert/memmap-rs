@@ -60,10 +60,7 @@ impl Protection {
 
     /// Returns `true` if the `Protection` is writable.
     pub fn write(self) -> bool {
-        match self {
-            Protection::ReadWrite | Protection::ReadCopy => true,
-            _ => false,
-        }
+        self == Protection::ReadWrite || self == Protection::ReadCopy
     }
 }
 
