@@ -1,6 +1,7 @@
 //! A cross-platform Rust API for memory maps.
 
 #![deny(warnings)]
+#![doc(html_root_url = "https://docs.rs/memmap/0.5.2")]
 
 #[cfg(windows)]
 mod windows;
