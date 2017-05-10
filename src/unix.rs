@@ -5,7 +5,6 @@ use std::fs::File;
 use std::os::unix::io::AsRawFd;
 
 use ::Protection;
-use ::MmapOptions;
 
 impl Protection {
 
@@ -38,14 +37,6 @@ const MAP_STACK: libc::c_int = libc::MAP_STACK;
               target_os = "freebsd",
               target_os = "android")))]
 const MAP_STACK: libc::c_int = 0;
-
-impl MmapOptions {
-    fn as_flag(self) -> libc::c_int {
-        let mut flag = 0;
-        if self.stack { flag |= MAP_STACK }
-        flag
-    }
-}
 
 pub struct MmapInner {
     ptr: *mut libc::c_void,
@@ -83,19 +74,19 @@ impl MmapInner {
         }
     }
 
-    /// Check if a file needs to be writable for copy-on-write mode.
-    #[inline]
-    pub fn needs_write_for_copy() -> bool {
-        false
+    fn stack_as_flag(stack: bool) -> libc::c_int {
+        let mut flag = 0;
+        if stack { flag |= MAP_STACK }
+        flag
     }
 
     /// Open an anonymous memory map.
-    pub fn anonymous(len: usize, prot: Protection, options: MmapOptions) -> io::Result<MmapInner> {
+    pub fn anonymous(len: usize, prot: Protection, stack: bool) -> io::Result<MmapInner> {
         let ptr = unsafe {
             libc::mmap(ptr::null_mut(),
                        len as libc::size_t,
                        prot.as_prot(),
-                       options.as_flag() | prot.as_flag() | libc::MAP_ANON,
+                       prot.as_flag() | libc::MAP_ANON | MmapInner::stack_as_flag(stack),
                        -1,
                        0)
         };
