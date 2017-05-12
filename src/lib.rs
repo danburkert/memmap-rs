@@ -106,7 +106,7 @@ impl Mmap {
     /// The file must be opened with read permissions, and write permissions if
     /// the supplied protection is `ReadWrite`. The file must not be empty.
     pub fn open(file: &File, prot: Protection) -> Result<Mmap> {
-        let len = try!(file.metadata()).len();
+        let len = file.metadata()?.len();
         if len > usize::MAX as u64 {
             return Err(Error::new(ErrorKind::InvalidData,
                                   "file length overflows usize"));
@@ -119,8 +119,8 @@ impl Mmap {
     /// The file must not be empty.
     pub fn open_path<P>(path: P, prot: Protection) -> Result<Mmap>
     where P: AsRef<Path> {
-        let file = try!(prot.as_open_options().open(path));
-        let len = try!(file.metadata()).len();
+        let file = prot.as_open_options().open(path)?;
+        let len = file.metadata()?.len();
         if len > usize::MAX as u64 {
             return Err(Error::new(ErrorKind::InvalidData,
                                   "file length overflows usize"));
