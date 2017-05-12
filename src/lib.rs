@@ -64,7 +64,7 @@ pub struct AnonymousMmapOptions {
 pub fn anonymous(len: usize) -> AnonymousMmapOptions {
     AnonymousMmapOptions {
         protection: None,
-        len,
+        len: len,
         stack: false,
     }
 }
@@ -85,7 +85,7 @@ impl AnonymousMmapOptions {
     }
 
     fn map_inner(&self) -> Result<MmapInner> {
-        let inner = MmapInner::anonymous(self.len, self.protection.unwrap(), self.stack)?;
+        let inner = try!(MmapInner::anonymous(self.len, self.protection.unwrap(), self.stack));
         Ok(inner)
     }
 
@@ -112,8 +112,8 @@ impl AnonymousMmapOptions {
                 "Invalid protection for a mutable mapping",
             )),
             Protection::ReadWrite | Protection::ReadCopy => {
-                let inner = this.map_inner()?;
-                Ok( MmapMut { inner } )
+                let inner = try!(this.map_inner());
+                Ok( MmapMut { inner: inner } )
             }
         }
     }
@@ -144,7 +144,7 @@ pub struct FileMmapOptions<'a> {
 /// modified by some other code while there's a reference to it.
 pub unsafe fn file(file: &File) -> FileMmapOptions {
     FileMmapOptions {
-        file,
+        file: file,
         protection: None,
         offset: 0,
         len: None,
@@ -173,14 +173,14 @@ impl<'a> FileMmapOptions<'a> {
         if let Some(l) = self.len {
             len = l;
         } else {
-            let l = self.file.metadata()?.len();
+            let l = try!(self.file.metadata()).len();
             if l > usize::MAX as u64 {
                 return Err(Error::new(ErrorKind::InvalidData,
                       "file length overflows usize"));
             }
             len = l as usize - self.offset;
         }
-        let inner = MmapInner::open(self.file, self.protection.unwrap(), self.offset, len)?;
+        let inner = try!(MmapInner::open(self.file, self.protection.unwrap(), self.offset, len));
         Ok(inner)
     }
 
@@ -201,8 +201,8 @@ impl<'a> FileMmapOptions<'a> {
         if this.protection.is_none() {
             this.protection = Some(Protection::Read);
         }
-        let inner = this.map_inner()?;
-        Ok( Mmap { inner } )
+        let inner = try!(this.map_inner());
+        Ok( Mmap { inner: inner } )
     }
 
     /// Actually map this mapping into the address space.
@@ -231,8 +231,8 @@ impl<'a> FileMmapOptions<'a> {
                 "Invalid protection for a mutable mapping",
             )),
             Protection::ReadWrite | Protection::ReadCopy => {
-                let inner = this.map_inner()?;
-                Ok( MmapMut { inner } )
+                let inner = try!(this.map_inner());
+                Ok( MmapMut { inner: inner } )
             }
         }
     }
@@ -289,7 +289,7 @@ impl Mmap {
     /// This method *also* returns `Err` with `ErrorKind` set to `InvalidInput` if the specified
     /// protection does not allow the mapping to be mutable.
     pub fn make_mut(mut self, protection: Protection) -> Result<MmapMut> {
-        self.inner.set_protection(protection)?;
+        try!(self.inner.set_protection(protection));
         match protection {
             Protection::Read | Protection::ReadExecute => Err(Error::new(
                 ErrorKind::InvalidInput,
@@ -422,7 +422,7 @@ impl MmapMut {
     ///
     /// This method will **not** return `Err` if the passed `protection` is mutable.
     pub fn make_read_only(mut self, protection: Protection) -> Result<Mmap> {
-        self.inner.set_protection(protection)?;
+        try!(self.inner.set_protection(protection));
         Ok( Mmap { inner: self.inner } )
     }
 }
