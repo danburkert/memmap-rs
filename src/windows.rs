@@ -70,7 +70,7 @@ impl MmapInner {
                 Err(io::Error::last_os_error())
             } else {
                 Ok(MmapInner {
-                    file: Some(try!(file.duplicate())),
+                    file: Some(file.duplicate()?),
                     ptr: ptr.offset(alignment as isize),
                     len: len as usize,
                 })
@@ -130,7 +130,7 @@ impl MmapInner {
     }
 
     pub fn flush(&self, offset: usize, len: usize) -> io::Result<()> {
-        try!(self.flush_async(offset, len));
+        self.flush_async(offset, len)?;
         if let Some(ref file) = self.file { file.sync_data() } else { Ok(()) }
     }
 
