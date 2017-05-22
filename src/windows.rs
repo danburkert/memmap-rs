@@ -10,7 +10,6 @@ use std::os::windows::io::AsRawHandle;
 use self::fs2::FileExt;
 
 use ::Protection;
-use ::MmapOptions;
 
 impl Protection {
 
@@ -78,13 +77,7 @@ impl MmapInner {
         }
     }
 
-    /// Check if a file needs to be writable for copy-on-write mode.
-    #[inline]
-    pub fn needs_write_for_copy() -> bool {
-        true
-    }
-
-    pub fn anonymous(len: usize, prot: Protection, _options: MmapOptions) -> io::Result<MmapInner> {
+    pub fn anonymous(len: usize, prot: Protection, _stack: bool) -> io::Result<MmapInner> {
         unsafe {
             // Create a mapping and view with maximum access permissions, then use `VirtualProtect`
             // to set the actual `Protection`. This way, we can set more permissive protection later
