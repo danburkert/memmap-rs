@@ -1,4 +1,11 @@
 //! A cross-platform Rust API for memory maps.
+//!
+//! ```rust
+//! fn foo() -> ::std::io::Result<()> {
+//!     ::std::fs::File::open("/tmp/foo")?;
+//!     Ok(())
+//! }
+//! ```
 
 #![deny(warnings)]
 #![doc(html_root_url = "https://docs.rs/memmap/0.5.2")]
