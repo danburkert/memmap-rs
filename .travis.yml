@@ -43,7 +43,7 @@ matrix:
     - env: TARGET=s390x-unknown-linux-gnu DISABLE_TESTS=1
 
     # Testing other channels
-    - env: TARGET=x86_64-unknown-linux-gnu
+    - env: TARGET=x86_64-unknown-linux-gnu SKIP_DOCTEST=1
       rust: 1.8.0
     - env: TARGET=x86_64-unknown-linux-gnu
       rust: stable
