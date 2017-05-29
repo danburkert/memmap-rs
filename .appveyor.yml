@@ -10,19 +10,25 @@ environment:
   # TODO These are all the build jobs. Adjust as necessary. Comment out what you
   # don't need
   matrix:
-    # MinGW
+    # MinGW Stable
     - TARGET: i686-pc-windows-gnu
     - TARGET: x86_64-pc-windows-gnu
 
-    # MSVC
+    # MSVC Stable
     - TARGET: i686-pc-windows-msvc
     - TARGET: x86_64-pc-windows-msvc
 
-    # Testing other channels
+    # Nightly
     - TARGET: x86_64-pc-windows-gnu
       RUST_VERSION: nightly
     - TARGET: x86_64-pc-windows-msvc
       RUST_VERSION: nightly
+
+    # 1.8.0
+    - TARGET: i686-pc-windows-msvc
+      RUST_VERSION: 1.8.0
+    - TARGET: x86_64-pc-windows-msvc
+      RUST_VERSION: 1.8.0
 
 install:
   - ps: >-
