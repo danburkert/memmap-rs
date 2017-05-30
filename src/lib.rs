@@ -25,6 +25,32 @@ use std::ops::{Deref, DerefMut};
 /// Determines how a memory map may be used. If the memory map is backed by a
 /// file, then the file must have permissions corresponding to the operations
 /// the protection level allows.
+///
+/// # Example
+///
+/// ```Rust
+/// use std::fs::OpenOptions;
+/// use memmap::Protection;
+///
+/// # fn try_main() -> std::io::Result<()> {
+/// let file = OpenOptions::new()
+///                         .read(true)
+///                         .write(true)
+///                         .open("README.md")?;
+///
+/// // Initialize a mutable memory map with `ReadCopy` protection
+/// let _mmap = unsafe { memmap::file(&file)
+///                             .protection(Protection::ReadCopy)
+///                             .map_mut()? };
+///
+/// # Ok(())
+/// # }
+/// # fn main() { try_main().unwrap(); }
+/// ```
+/// __Note:__ Use [`make_read_only`] to convert a [`MmapMut`] to an [`Mmap`].
+/// [`make_read_only`]: struct.MmapMut.html#method.make_read_only
+/// [`Mmap`]: struct.Mmap.html
+/// [`MmapMut`]: struct.MmapMut.html
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Protection {
 
@@ -61,6 +87,28 @@ pub struct AnonymousMmapOptions {
 }
 
 /// Configure a new anonymous mapping of `len` bytes.
+///
+/// # Example
+///
+/// ```rust
+/// # use std::error::Error;
+/// fn change_bytes(bytes: &mut [u8]) {
+///     for i in 0..100 {
+///         bytes[i] = i as u8;
+///     }
+/// }
+///
+/// fn write_to_anon() -> std::io::Result<()> {
+///     let mut mmap = memmap::anonymous(4096)
+///                         .protection(memmap::Protection::ReadWrite)
+///                         .map_mut()?;
+///     assert_eq!(mmap[51], 0);
+///     change_bytes(&mut mmap);
+///     assert_eq!(mmap[51], 51);
+///     Ok(())
+/// }
+/// # fn main() { write_to_anon().unwrap(); }
+/// ```
 pub fn anonymous(len: usize) -> AnonymousMmapOptions {
     AnonymousMmapOptions {
         protection: None,
@@ -73,12 +121,43 @@ impl AnonymousMmapOptions {
     /// Make this mapping suitable to be a process or thread stack.
     ///
     /// This corresponds to `MAP_STACK` on Linux, which is currently a no-op.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use std::error::Error;
+    /// # fn try_main() -> std::io::Result<()> {
+    /// let mut mmap_stack = memmap::anonymous(4096)
+    ///                         .protection(memmap::Protection::ReadWrite)
+    ///                         .stack()
+    ///                         .map_mut()?;
+    /// # Ok(())
+    /// # }
+    /// # fn main() { try_main().unwrap(); }
+    /// ```
     pub fn stack(&mut self) -> &mut Self {
         self.stack = true;
         self
     }
 
     /// Set a protection to be used by this mapping.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use std::error::Error;
+    /// # fn try_main() -> std::io::Result<()> {
+    /// let mut mmap_write = memmap::anonymous(4096)
+    ///                         .protection(memmap::Protection::ReadWrite)
+    ///                         .map_mut()?;
+    ///
+    /// let mut mmap_read_copy = memmap::anonymous(4096)
+    ///                         .protection(memmap::Protection::ReadCopy)
+    ///                         .map_mut()?;
+    /// # Ok(())
+    /// # }
+    /// # fn main() { try_main().unwrap(); }
+    /// ```
     pub fn protection(&mut self, protection: Protection) -> &mut Self {
         self.protection = Some(protection);
         self
@@ -101,6 +180,21 @@ impl AnonymousMmapOptions {
     ///
     /// This method *also* returns `Err` with `ErrorKind` set to `InvalidInput` if the specified
     /// protection does not allow the mapping to be mutable.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use std::error::Error;
+    /// use std::io::Write;
+    /// # fn try_main() -> std::io::Result<()> {
+    /// let mut mmap = memmap::anonymous(4096)
+    ///                     .protection(memmap::Protection::ReadWrite)
+    ///                     .map_mut()?;
+    /// (&mut mmap[..]).write(b"foo")?;
+    /// # Ok(())
+    /// # }
+    /// # fn main() { try_main().unwrap(); }
+    /// ```
     pub fn map_mut(&self) -> Result<MmapMut> {
         let mut this = *self;
         if this.protection.is_none() {
@@ -142,6 +236,25 @@ pub struct FileMmapOptions<'a> {
 /// that no other process or thread is accessing the same file concurrently.
 /// In particular, it is **undefined behavior** in Rust for the memory to be
 /// modified by some other code while there's a reference to it.
+///
+/// # Example
+///
+/// ```rust
+/// # use std::error::Error;
+/// use std::fs::File;
+///
+/// # fn try_main() -> std::io::Result<()> {
+/// let file = File::open("README.md")?;
+/// let mmap = unsafe { memmap::file(&file)
+///                         .offset(2)
+///                         .len(6)
+///                         .protection(memmap::Protection::Read)
+///                         .map()? };
+/// assert_eq!(b"memmap", &mmap[0..6]);
+/// # Ok(())
+/// # }
+/// # fn main() { try_main().unwrap(); }
+/// ```
 pub unsafe fn file(file: &File) -> FileMmapOptions {
     FileMmapOptions {
         file: file,
@@ -153,16 +266,72 @@ pub unsafe fn file(file: &File) -> FileMmapOptions {
 
 impl<'a> FileMmapOptions<'a> {
     /// Configure this mapping to start at byte `offset` from the beginning of the file.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use std::error::Error;
+    /// use std::fs::File;
+    ///
+    /// # fn try_main() -> std::io::Result<()> {
+    /// let file = File::open("README.md")?;
+    /// let (little, big) = (10, 100);
+    ///
+    /// let mmap_little_offset = unsafe { memmap::file(&file)
+    ///                                     .offset(little)
+    ///                                     .map()? };
+    ///
+    /// let mmap_big_offset = unsafe { memmap::file(&file)
+    ///                                     .offset(big)
+    ///                                     .map()? };
+    /// # Ok(())
+    /// # }
+    /// # fn main() { try_main().unwrap(); }
+    /// ```
     pub fn offset(&mut self, offset: usize) -> &mut Self {
         self.offset = offset;
         self
     }
     /// Configure this mapping to be `len` bytes long.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use std::error::Error;
+    /// use std::fs::File;
+    ///
+    /// # fn try_main() -> std::io::Result<()> {
+    /// let file = File::open("README.md")?;
+    ///
+    /// let mmap = unsafe { memmap::file(&file)
+    ///                         .len(25)
+    ///                         .map()? };
+    /// # Ok(())
+    /// # }
+    /// # fn main() { try_main().unwrap(); }
+    /// ```
     pub fn len(&mut self, len: usize) -> &mut Self {
         self.len = Some(len);
         self
     }
     /// Set a protection to be used by this mapping.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use std::error::Error;
+    /// use std::fs::File;
+    ///
+    /// # fn try_main() -> std::io::Result<()> {
+    /// let file = File::open("README.md")?;
+    ///
+    /// let mmap = unsafe { memmap::file(&file)
+    ///                         .protection(memmap::Protection::Read)
+    ///                         .map()? };
+    /// # Ok(())
+    /// # }
+    /// # fn main() { try_main().unwrap(); }
+    /// ```
     pub fn protection(&mut self, protection: Protection) -> &mut Self {
         self.protection = Some(protection);
         self
@@ -196,6 +365,23 @@ impl<'a> FileMmapOptions<'a> {
     ///
     /// This method returns `Err` when the underlying system call fails, which can happen for
     /// a variety of reasons, such as when you don't have the necessary permissions for the file.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use std::fs::File;
+    /// # use std::error::Error;
+    /// # fn try_main() -> std::io::Result<()> {
+    /// let file = File::open("README.md")?;
+    /// let mmap = unsafe { memmap::file(&file)
+    ///                         .protection(memmap::Protection::Read)
+    ///                         .offset(20)
+    ///                         .map()? };
+    /// println!("{}", mmap[0]);
+    /// # Ok(())
+    /// # }
+    /// # fn main() { try_main().unwrap(); }
+    /// ```
     pub fn map(&self) -> Result<Mmap> {
         let mut this = *self;
         if this.protection.is_none() {
@@ -220,6 +406,24 @@ impl<'a> FileMmapOptions<'a> {
     ///
     /// This method *also* returns `Err` with `ErrorKind` set to `InvalidInput` if the specified
     /// protection does not allow the mapping to be mutable.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use std::fs::File;
+    /// use std::io::Write;
+    ///
+    /// # use std::error::Error;
+    /// # fn try_main() -> std::io::Result<()> {
+    /// let file = File::open("README.md")?;
+    /// let mut mmap = unsafe { memmap::file(&file)
+    ///                             .protection(memmap::Protection::ReadCopy)
+    ///                             .map_mut()? };
+    /// (&mut mmap[..]).write(b"Hello world");
+    /// # Ok(())
+    /// # }
+    /// # fn main() { try_main().unwrap(); }
+    /// ```
     pub fn map_mut(&self) -> Result<MmapMut> {
         let mut this = *self;
         if this.protection.is_none() {
@@ -244,13 +448,20 @@ impl<'a> FileMmapOptions<'a> {
 /// [`memmap::file(..)`](fn.file.html)`.map()` to create a file-backed memory map, or
 /// [`memmap::anonymous(..)`](fn.anonymous.html)`.map()` to create an anonymous memory map.
 ///
+/// # Example
+///
 /// ```
+/// # use std::error::Error;
 /// use std::io::Write;
 /// use std::fs::File;
 ///
-/// let file = File::open("README.md").unwrap();
-/// let mmap = unsafe { memmap::file(&file).map().unwrap() };
+/// # fn try_main() -> std::io::Result<()> {
+/// let file = File::open("README.md")?;
+/// let mmap = unsafe { memmap::file(&file).map()? };
 /// assert_eq!(b"# memmap", &mmap[0..8]);
+/// # Ok(())
+/// # }
+/// # fn main() { try_main().unwrap(); }
 /// ```
 ///
 /// See [`MmapMut`](struct.MmapMut.html) for the mutable version.
@@ -272,6 +483,24 @@ impl Mmap {
     ///
     /// This method returns `Err` when the underlying system call fails, which can happen for
     /// a variety of reasons, such as when you don't have the necessary permissions for the file.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use std::error::Error;
+    /// use memmap::Protection;
+    /// use std::io::Write;
+    /// use std::fs::File;
+    ///
+    /// # fn try_main() -> std::io::Result<()> {
+    /// let file = File::open("README.md")?;
+    /// let mut mmap = unsafe { memmap::file(&file).protection(Protection::Read).map()? };
+    ///
+    /// mmap.set_protection(Protection::ReadExecute);
+    /// # Ok(())
+    /// # }
+    /// # fn main() { try_main().unwrap(); }
+    /// ```
     pub fn set_protection(&mut self, protection: Protection) -> Result<()> {
         self.inner.set_protection(protection)
     }
@@ -288,6 +517,24 @@ impl Mmap {
     ///
     /// This method *also* returns `Err` with `ErrorKind` set to `InvalidInput` if the specified
     /// protection does not allow the mapping to be mutable.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// use std::fs::File;
+    /// use memmap::Protection;
+    ///
+    /// # fn try_main() -> std::io::Result<()> {
+    /// let file = File::open("README.md")?;
+    /// let mmap = unsafe { memmap::file(&file)
+    ///                             .len(100)
+    ///                             .protection(Protection::Read).map()? };
+    ///
+    /// let mut _mmap = mmap.make_mut(Protection::ReadWrite)?;
+    /// # Ok(())
+    /// # }
+    /// # fn main() { try_main().unwrap(); }
+    /// ```
     pub fn make_mut(mut self, protection: Protection) -> Result<MmapMut> {
         try!(self.inner.set_protection(protection));
         match protection {
@@ -326,12 +573,19 @@ impl fmt::Debug for Mmap {
 /// [`memmap::anonymous(..)`](fn.anonymous.html)`.map_mut()`
 /// to create an anonymous memory map.
 ///
-/// ```
+/// # Example
+///
+/// ```rust
+/// # use std::error::Error;
 /// use std::io::Write;
 ///
-/// let mut mmap = memmap::anonymous(4096).map_mut().unwrap();
-/// (&mut mmap[..]).write(b"foo").unwrap();
+/// # fn try_main() -> std::io::Result<()> {
+/// let mut mmap = memmap::anonymous(4096).map_mut()?;
+/// (&mut mmap[..]).write(b"foo")?;
 /// assert_eq!(b"foo\0\0", &mmap[0..5]);
+/// # Ok(())
+/// # }
+/// # fn main() { try_main().unwrap(); }
 /// ```
 ///
 /// See [`Mmap`](struct.Mmap.html) for the immutable version.
@@ -345,6 +599,26 @@ impl MmapMut {
     /// When this returns with a non-error result, all outstanding changes to a
     /// file-backed memory map are guaranteed to be durably stored. The file's
     /// metadata (including last modification timestamp) may not be updated.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// use std::io::Write;
+    /// use std::fs::File;
+    /// use memmap::Protection;
+    ///
+    /// # fn try_main() -> std::io::Result<()> {
+    /// let file = File::open("README.md")?;
+    /// let mut mmap = unsafe { memmap::file(&file)
+    ///                             .protection(Protection::ReadWrite)
+    ///                             .map_mut()? };
+    ///
+    /// (&mut mmap[..]).write(b"Hi!")?;
+    /// mmap.flush()?;
+    /// # Ok(())
+    /// # }
+    /// # fn main() { try_main().unwrap(); }
+    /// ```
     pub fn flush(&self) -> Result<()> {
         let len = self.len();
         self.inner.flush(0, len)
@@ -355,6 +629,26 @@ impl MmapMut {
     /// This method initiates flushing modified pages to durable storage, but it
     /// will not wait for the operation to complete before returning. The file's
     /// metadata (including last modification timestamp) may not be updated.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// use std::io::Write;
+    /// use std::fs::File;
+    /// use memmap::Protection;
+    ///
+    /// # fn try_main() -> std::io::Result<()> {
+    /// let file = File::open("README.md")?;
+    /// let mut mmap = unsafe { memmap::file(&file)
+    ///                             .protection(Protection::ReadWrite)
+    ///                             .map_mut()? };
+    ///
+    /// (&mut mmap[..]).write(b"Hi!")?;
+    /// mmap.flush_async()?;
+    /// # Ok(())
+    /// # }
+    /// # fn main() { try_main().unwrap(); }
+    /// ```
     pub fn flush_async(&self) -> Result<()> {
         let len = self.len();
         self.inner.flush_async(0, len)
@@ -370,6 +664,27 @@ impl MmapMut {
     /// updated. It is not guaranteed the only the changes in the specified
     /// range are flushed; other outstanding changes to the mmap may be flushed
     /// as well.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// use std::io::Write;
+    /// use std::fs::File;
+    /// use memmap::Protection;
+    ///
+    /// # fn try_main() -> std::io::Result<()> {
+    /// let file = File::open("README.md")?;
+    /// let mut mmap = unsafe { memmap::file(&file)
+    ///                             .protection(Protection::ReadWrite)
+    ///                             .len(100)
+    ///                             .map_mut()? };
+    ///
+    /// (&mut mmap[..]).write(b"Hi!")?;
+    /// mmap.flush_range(0, 3)?;
+    /// # Ok(())
+    /// # }
+    /// # fn main() { try_main().unwrap(); }
+    /// ```
     pub fn flush_range(&self, offset: usize, len: usize) -> Result<()> {
         self.inner.flush(offset, len)
     }
@@ -385,6 +700,26 @@ impl MmapMut {
     /// is not guaranteed that the only changes flushed are those in the
     /// specified range; other outstanding changes to the mmap may be flushed as
     /// well.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// use std::io::Write;
+    /// use std::fs::File;
+    /// use memmap::Protection;
+    ///
+    /// # fn try_main() -> std::io::Result<()> {
+    /// let file = File::open("README.md")?;
+    /// let mut mmap = unsafe { memmap::file(&file)
+    ///                             .protection(Protection::ReadWrite)
+    ///                             .map_mut()? };
+    ///
+    /// (&mut mmap[..]).write(b"Hi!")?;
+    /// mmap.flush_async_range(0, 3)?;
+    /// # Ok(())
+    /// # }
+    /// # fn main() { try_main().unwrap(); }
+    /// ```
     pub fn flush_async_range(&self, offset: usize, len: usize) -> Result<()> {
         self.inner.flush_async(offset, len)
     }
@@ -402,6 +737,24 @@ impl MmapMut {
     ///
     /// This method *also* returns `Err` with `ErrorKind` set to `InvalidInput` if the specified
     /// protection does not allow the mapping to be mutable.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// use memmap::Protection;
+    /// use std::fs::File;
+    ///
+    /// # fn try_main() -> std::io::Result<()> {
+    /// let file = File::open("README.md")?;
+    /// let mut mmap = unsafe { memmap::file(&file)
+    ///                             .protection(Protection::ReadWrite)
+    ///                             .map_mut()? };
+    ///
+    /// mmap.set_protection(Protection::ReadCopy)?;
+    /// # Ok(())
+    /// # }
+    /// # fn main() { try_main().unwrap(); }
+    /// ```
     pub fn set_protection(&mut self, protection: Protection) -> Result<()> {
         match protection {
             Protection::Read | Protection::ReadExecute => Err(Error::new(
@@ -421,6 +774,27 @@ impl MmapMut {
     /// a variety of reasons, such as when you don't have the necessary permissions for the file.
     ///
     /// This method will **not** return `Err` if the passed `protection` is mutable.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// use memmap::Protection;
+    /// use std::io::Write;
+    /// use std::fs::File;
+    ///
+    /// # fn try_main() -> std::io::Result<()> {
+    /// let file = File::open("README.md")?;
+    /// let mut mmap = unsafe { memmap::file(&file)
+    ///                             .protection(Protection::ReadWrite)
+    ///                             .map_mut()? };
+    ///
+    /// (&mut mmap[..]).write(b"Hi!")?;
+    ///
+    /// let mmap = mmap.make_read_only(Protection::Read)?;
+    /// # Ok(())
+    /// # }
+    /// # fn main() { try_main().unwrap(); }
+    /// ```
     pub fn make_read_only(mut self, protection: Protection) -> Result<Mmap> {
         try!(self.inner.set_protection(protection));
         Ok( Mmap { inner: self.inner } )
