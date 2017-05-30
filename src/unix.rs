@@ -2,31 +2,7 @@ extern crate libc;
 
 use std::{io, ptr};
 use std::fs::File;
-use std::os::unix::io::AsRawFd;
-
-use ::Protection;
-
-impl Protection {
-
-    /// Returns the `Protection` value as a POSIX protection flag.
-    fn as_prot(self) -> libc::c_int {
-        match self {
-            Protection::Read => libc::PROT_READ,
-            Protection::ReadWrite => libc::PROT_READ | libc::PROT_WRITE,
-            Protection::ReadCopy => libc::PROT_READ | libc::PROT_WRITE,
-            Protection::ReadExecute => libc::PROT_READ | libc::PROT_EXEC,
-        }
-    }
-
-    fn as_flag(self) -> libc::c_int {
-        match self {
-            Protection::Read => libc::MAP_SHARED,
-            Protection::ReadWrite => libc::MAP_SHARED,
-            Protection::ReadCopy => libc::MAP_PRIVATE,
-            Protection::ReadExecute => libc::MAP_SHARED,
-        }
-    }
-}
+use std::os::unix::io::{AsRawFd, RawFd};
 
 #[cfg(any(all(target_os = "linux", not(target_arch="mips")),
           target_os = "freebsd",
@@ -45,7 +21,14 @@ pub struct MmapInner {
 
 impl MmapInner {
 
-    pub fn open(file: &File, prot: Protection, offset: usize, len: usize) -> io::Result<MmapInner> {
+    /// Creates a new `MmapInner`.
+    ///
+    /// This is a thin wrapper around the `mmap` sytem call.
+    fn new(len: usize,
+           prot: libc::c_int,
+           flags: libc::c_int,
+           file: RawFd,
+           offset: usize) -> io::Result<MmapInner> {
         let alignment = offset % page_size();
         let aligned_offset = offset - alignment;
         let aligned_len = len + alignment;
@@ -58,9 +41,9 @@ impl MmapInner {
         unsafe {
             let ptr = libc::mmap(ptr::null_mut(),
                                  aligned_len as libc::size_t,
-                                 prot.as_prot(),
-                                 prot.as_flag(),
-                                 file.as_raw_fd(),
+                                 prot,
+                                 flags,
+                                 file,
                                  aligned_offset as libc::off_t);
 
             if ptr == libc::MAP_FAILED {
@@ -74,31 +57,42 @@ impl MmapInner {
         }
     }
 
-    fn stack_as_flag(stack: bool) -> libc::c_int {
-        let mut flag = 0;
-        if stack { flag |= MAP_STACK }
-        flag
+    pub fn map(len: usize, file: &File, offset: usize) -> io::Result<MmapInner> {
+        MmapInner::new(len, libc::PROT_READ, libc::MAP_SHARED, file.as_raw_fd(), offset)
+    }
+
+    pub fn map_exec(len: usize, file: &File, offset: usize) -> io::Result<MmapInner> {
+        MmapInner::new(len,
+                       libc::PROT_READ | libc::PROT_EXEC,
+                       libc::MAP_SHARED,
+                       file.as_raw_fd(),
+                       offset)
+    }
+
+    pub fn map_mut(len: usize, file: &File, offset: usize) -> io::Result<MmapInner> {
+        MmapInner::new(len,
+                       libc::PROT_READ | libc::PROT_WRITE,
+                       libc::MAP_SHARED,
+                       file.as_raw_fd(),
+                       offset)
+    }
+
+    pub fn map_copy(len: usize, file: &File, offset: usize) -> io::Result<MmapInner> {
+        MmapInner::new(len,
+                       libc::PROT_READ | libc::PROT_WRITE,
+                       libc::MAP_PRIVATE,
+                       file.as_raw_fd(),
+                       offset)
     }
 
     /// Open an anonymous memory map.
-    pub fn anonymous(len: usize, prot: Protection, stack: bool) -> io::Result<MmapInner> {
-        let ptr = unsafe {
-            libc::mmap(ptr::null_mut(),
-                       len as libc::size_t,
-                       prot.as_prot(),
-                       prot.as_flag() | libc::MAP_ANON | MmapInner::stack_as_flag(stack),
+    pub fn map_anon(len: usize, stack: bool) -> io::Result<MmapInner> {
+        let stack = if stack { MAP_STACK } else { 0 };
+        MmapInner::new(len,
+                       libc::PROT_READ | libc::PROT_WRITE,
+                       libc::MAP_SHARED | libc::MAP_ANON | stack,
                        -1,
                        0)
-        };
-
-        if ptr == libc::MAP_FAILED {
-            Err(io::Error::last_os_error())
-        } else {
-            Ok(MmapInner {
-                ptr: ptr,
-                len: len as usize,
-            })
-        }
     }
 
     pub fn flush(&self, offset: usize, len: usize) -> io::Result<()> {
@@ -129,20 +123,29 @@ impl MmapInner {
         }
     }
 
-    pub fn set_protection(&mut self, prot: Protection) -> io::Result<()> {
+    fn mprotect(&mut self, prot: libc::c_int) -> io::Result<()> {
         unsafe {
             let alignment = self.ptr as usize % page_size();
             let ptr = self.ptr.offset(- (alignment as isize));
             let len = self.len + alignment;
-            let result = libc::mprotect(ptr,
-                                        len,
-                                        prot.as_prot());
-            if result == 0 {
+            if libc::mprotect(ptr, len, prot) == 0 {
                 Ok(())
             } else {
                 Err(io::Error::last_os_error())
             }
         }
+    }
+
+    pub fn make_read_only(&mut self) -> io::Result<()> {
+        self.mprotect(libc::PROT_READ)
+    }
+
+    pub fn make_exec(&mut self) -> io::Result<()> {
+        self.mprotect(libc::PROT_READ | libc::PROT_EXEC)
+    }
+
+    pub fn make_mut(&mut self) -> io::Result<()> {
+        self.mprotect(libc::PROT_READ | libc::PROT_WRITE)
     }
 
     pub fn ptr(&self) -> *const u8 {

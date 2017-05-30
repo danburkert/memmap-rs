@@ -4,6 +4,8 @@ use std::env;
 use std::io::{self, Write};
 use std::fs::File;
 
+use memmap::Mmap;
+
 /// Output a file's contents to stdout. The file path must be provided as the first process
 /// argument.
 fn main() {
@@ -11,8 +13,7 @@ fn main() {
 
     let file = File::open(path).expect("failed to open the file");
 
-    let mmap = unsafe { memmap::file(&file) }
-            .map().expect("failed to map the file");
+    let mmap = unsafe { Mmap::map(&file).expect("failed to map the file") };
 
     io::stdout().write_all(&mmap[..]).expect("failed to output the file contents");
 }

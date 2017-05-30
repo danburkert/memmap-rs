@@ -5,44 +5,28 @@ extern crate winapi;
 use std::{io, mem, ptr};
 use std::fs::File;
 use std::os::raw::c_void;
-use std::os::windows::io::AsRawHandle;
+use std::os::windows::io::{RawHandle, AsRawHandle};
 
 use self::fs2::FileExt;
-
-use ::Protection;
-
-impl Protection {
-
-    /// Returns the `Protection` as a flag appropriate for a call to `CreateFileMapping`.
-    fn as_mapping_flag(self) -> winapi::DWORD {
-        match self {
-            Protection::Read => winapi::PAGE_READONLY,
-            Protection::ReadWrite => winapi::PAGE_READWRITE,
-            Protection::ReadCopy => winapi::PAGE_READONLY,
-            Protection::ReadExecute => winapi::PAGE_EXECUTE_READ,
-        }
-    }
-
-    /// Returns the `Protection` as a flag appropriate for a call to `MapViewOfFile`.
-    fn as_view_flag(self) -> winapi::DWORD {
-        match self {
-            Protection::Read => winapi::FILE_MAP_READ,
-            Protection::ReadWrite => winapi::FILE_MAP_ALL_ACCESS,
-            Protection::ReadCopy => winapi::FILE_MAP_COPY,
-            Protection::ReadExecute => winapi::FILE_MAP_READ | winapi::FILE_MAP_EXECUTE,
-        }
-    }
-}
 
 pub struct MmapInner {
     file: Option<File>,
     ptr: *mut c_void,
     len: usize,
+    copy: bool,
 }
 
 impl MmapInner {
 
-    pub fn open(file: &File, prot: Protection, offset: usize, len: usize) -> io::Result<MmapInner> {
+    /// Creates a new `MmapInner`.
+    ///
+    /// This is a thin wrapper around the `CreateFileMappingW` and `MapViewOfFile` system calls.
+    pub fn new(file: &File,
+               protect: winapi::DWORD,
+               access: winapi::DWORD,
+               offset: usize,
+               len: usize,
+               copy: bool) -> io::Result<MmapInner> {
         let alignment = offset % allocation_granularity();
         let aligned_offset = offset - alignment;
         let aligned_len = len + alignment;
@@ -50,7 +34,7 @@ impl MmapInner {
         unsafe {
             let handle = kernel32::CreateFileMappingW(file.as_raw_handle(),
                                                       ptr::null_mut(),
-                                                      prot.as_mapping_flag(),
+                                                      protect,
                                                       0,
                                                       0,
                                                       ptr::null());
@@ -59,7 +43,7 @@ impl MmapInner {
             }
 
             let ptr = kernel32::MapViewOfFile(handle,
-                                              prot.as_view_flag(),
+                                              access,
                                               (aligned_offset >> 16 >> 16) as winapi::DWORD,
                                               (aligned_offset & 0xffffffff) as winapi::DWORD,
                                               aligned_len as winapi::SIZE_T);
@@ -72,12 +56,91 @@ impl MmapInner {
                     file: Some(try!(file.duplicate())),
                     ptr: ptr.offset(alignment as isize),
                     len: len as usize,
+                    copy: copy,
                 })
             }
         }
     }
 
-    pub fn anonymous(len: usize, prot: Protection, _stack: bool) -> io::Result<MmapInner> {
+    pub fn map(len: usize, file: &File, offset: usize) -> io::Result<MmapInner> {
+        let write = protection_supported(file.as_raw_handle(), winapi::PAGE_READWRITE);
+        let exec = protection_supported(file.as_raw_handle(), winapi::PAGE_EXECUTE_READ);
+        let mut access = winapi::FILE_MAP_READ;
+        let protection = match (write, exec) {
+            (true, true) => {
+                access |= winapi::FILE_MAP_WRITE | winapi::FILE_MAP_EXECUTE;
+                winapi::PAGE_EXECUTE_READWRITE
+            },
+            (true, false) => {
+                access |= winapi::FILE_MAP_WRITE;
+                winapi::PAGE_READWRITE
+            },
+            (false, true) => {
+                access |= winapi::FILE_MAP_EXECUTE;
+                winapi::PAGE_EXECUTE_READ
+            },
+            (false, false) => winapi::PAGE_READONLY,
+        };
+
+        let mut inner = try!(MmapInner::new(file, protection, access, offset, len, false));
+        if write || exec {
+            try!(inner.make_read_only());
+        }
+        Ok(inner)
+    }
+
+    pub fn map_exec(len: usize, file: &File, offset: usize) -> io::Result<MmapInner> {
+        let write = protection_supported(file.as_raw_handle(), winapi::PAGE_READWRITE);
+        let mut access = winapi::FILE_MAP_READ | winapi::FILE_MAP_EXECUTE;
+        let protection = if write {
+            access |= winapi::FILE_MAP_WRITE;
+            winapi::PAGE_EXECUTE_READWRITE
+        } else {
+            winapi::PAGE_EXECUTE_READ
+        };
+
+        let mut inner = try!(MmapInner::new(file, protection, access, offset, len, false));
+        if write {
+            try!(inner.make_exec());
+        }
+        Ok(inner)
+    }
+
+    pub fn map_mut(len: usize, file: &File, offset: usize) -> io::Result<MmapInner> {
+        let exec = protection_supported(file.as_raw_handle(), winapi::PAGE_EXECUTE_READ);
+        let mut access = winapi::FILE_MAP_READ | winapi::FILE_MAP_WRITE;
+        let protection = if exec {
+            access |= winapi::FILE_MAP_EXECUTE;
+            winapi::PAGE_EXECUTE_READWRITE
+        } else {
+            winapi::PAGE_READWRITE
+        };
+
+        let mut inner = try!(MmapInner::new(file, protection, access, offset, len, false));
+        if exec {
+            try!(inner.make_mut());
+        }
+        Ok(inner)
+    }
+
+    pub fn map_copy(len: usize, file: &File, offset: usize) -> io::Result<MmapInner> {
+        let exec = protection_supported(file.as_raw_handle(), winapi::PAGE_EXECUTE_READWRITE);
+        let mut access = winapi::FILE_MAP_COPY;
+        let protection = if exec {
+            access |= winapi::FILE_MAP_EXECUTE;
+            winapi::PAGE_EXECUTE_WRITECOPY
+        } else {
+            winapi::PAGE_WRITECOPY
+        };
+
+        let mut inner = try!(MmapInner::new(file, protection, access, offset, len, true));
+        if exec {
+            try!(inner.make_mut());
+        }
+        Ok(inner)
+    }
+
+    pub fn map_anon(len: usize, _stack: bool) -> io::Result<MmapInner> {
         unsafe {
             // Create a mapping and view with maximum access permissions, then use `VirtualProtect`
             // to set the actual `Protection`. This way, we can set more permissive protection later
@@ -108,13 +171,14 @@ impl MmapInner {
             let mut old = 0;
             let result = kernel32::VirtualProtect(ptr,
                                                   len as winapi::SIZE_T,
-                                                  prot.as_mapping_flag(),
+                                                  winapi::PAGE_READWRITE,
                                                   &mut old);
             if result != 0 {
                 Ok(MmapInner {
                     file: None,
                     ptr: ptr,
                     len: len as usize,
+                    copy: false,
                 })
             } else {
                 Err(io::Error::last_os_error())
@@ -124,7 +188,10 @@ impl MmapInner {
 
     pub fn flush(&self, offset: usize, len: usize) -> io::Result<()> {
         try!(self.flush_async(offset, len));
-        if let Some(ref file) = self.file { file.sync_data() } else { Ok(()) }
+        if let Some(ref file) = self.file {
+            try!(file.sync_data());
+        }
+        Ok(())
     }
 
     pub fn flush_async(&self, offset: usize, len: usize) -> io::Result<()> {
@@ -137,7 +204,7 @@ impl MmapInner {
         }
     }
 
-    pub fn set_protection(&mut self, prot: Protection) -> io::Result<()> {
+    fn virtual_protect(&mut self, protect: winapi::DWORD) -> io::Result<()> {
         unsafe {
             let alignment = self.ptr as usize % allocation_granularity();
             let ptr = self.ptr.offset(- (alignment as isize));
@@ -146,7 +213,7 @@ impl MmapInner {
             let mut old = 0;
             let result = kernel32::VirtualProtect(ptr,
                                                   aligned_len,
-                                                  prot.as_mapping_flag(),
+                                                  protect,
                                                   &mut old);
 
             if result != 0 {
@@ -154,6 +221,26 @@ impl MmapInner {
             } else {
                 Err(io::Error::last_os_error())
             }
+        }
+    }
+
+    pub fn make_read_only(&mut self) -> io::Result<()> {
+        self.virtual_protect(winapi::PAGE_READONLY)
+    }
+
+    pub fn make_exec(&mut self) -> io::Result<()> {
+        if self.copy {
+            self.virtual_protect(winapi::PAGE_EXECUTE_WRITECOPY)
+        } else {
+            self.virtual_protect(winapi::PAGE_EXECUTE_READ)
+        }
+    }
+
+    pub fn make_mut(&mut self) -> io::Result<()> {
+        if self.copy {
+            self.virtual_protect(winapi::PAGE_WRITECOPY)
+        } else {
+            self.virtual_protect(winapi::PAGE_READWRITE)
         }
     }
 
@@ -183,6 +270,22 @@ impl Drop for MmapInner {
 
 unsafe impl Sync for MmapInner { }
 unsafe impl Send for MmapInner { }
+
+fn protection_supported(handle: RawHandle, protection: winapi::DWORD) -> bool {
+    unsafe {
+        let handle = kernel32::CreateFileMappingW(handle,
+                                                  ptr::null_mut(),
+                                                  protection,
+                                                  0,
+                                                  0,
+                                                  ptr::null());
+        if handle == ptr::null_mut() {
+            return false;
+        }
+        kernel32::CloseHandle(handle);
+        true
+    }
+}
 
 fn allocation_granularity() -> usize {
     unsafe {
