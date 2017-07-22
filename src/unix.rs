@@ -1,6 +1,6 @@
 extern crate libc;
 
-use std::io;
+use std::{io, ptr};
 use std::fs::File;
 use std::os::unix::io::AsRawFd;
 
@@ -54,12 +54,17 @@ impl MmapInner {
             return Err(io::Error::new(io::ErrorKind::InvalidInput,
                                       "memory map must have a non-zero length"));
         }
-
+        let mut flags = prot.as_flag();
+        if addr != ptr::null_mut() {
+            // a specifiy address was requested
+            flags |= libc::MAP_FIXED;
+        }
+        
         unsafe {
             let ptr = libc::mmap(addr as *mut libc::c_void,
                                  aligned_len as libc::size_t,
                                  prot.as_prot(),
-                                 prot.as_flag(),
+                                 flags,
                                  file.as_raw_fd(),
                                  aligned_offset as libc::off_t);
 

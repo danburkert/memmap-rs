@@ -166,10 +166,10 @@ impl AnonymousMmapOptions {
         self
     }
 
-    /// Set the target address hint.
+    /// Set the target address.
     ///
-    /// The OS may or may not follow this.
-    /// Insuficcient alignment will cause the mapping to fail on windows.
+    /// The address needs to be corretly aligned.
+    /// If the address space is already in use, this may (on unix) replace existing mappins, or cause an error (windows).
     ///
     /// # Example
     ///
@@ -372,8 +372,8 @@ impl<'a> FileMmapOptions<'a> {
     
     /// Set the target address hint.
     ///
-    /// The OS may or may not follow this.
     /// Insuficcient alignment will cause the mapping to fail on windows.
+    /// If the address space is already in use, this may (on unix) replace existing mappins, or cause an error (windows).
     ///
     /// # Example
     ///
