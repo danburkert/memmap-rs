@@ -42,7 +42,7 @@ pub struct MmapInner {
 
 impl MmapInner {
 
-    pub fn open(file: &File, prot: Protection, offset: usize, len: usize) -> io::Result<MmapInner> {
+    pub fn open(file: &File, addr: *mut u8, prot: Protection, offset: usize, len: usize) -> io::Result<MmapInner> {
         let alignment = offset % allocation_granularity();
         let aligned_offset = offset - alignment;
         let aligned_len = len + alignment;
@@ -58,11 +58,12 @@ impl MmapInner {
                 return Err(io::Error::last_os_error());
             }
 
-            let ptr = kernel32::MapViewOfFile(handle,
-                                              prot.as_view_flag(),
-                                              (aligned_offset >> 16 >> 16) as winapi::DWORD,
-                                              (aligned_offset & 0xffffffff) as winapi::DWORD,
-                                              aligned_len as winapi::SIZE_T);
+            let ptr = kernel32::MapViewOfFileEx(handle,
+                                                prot.as_view_flag(),
+                                                (aligned_offset >> 16 >> 16) as winapi::DWORD,
+                                                (aligned_offset & 0xffffffff) as winapi::DWORD,
+                                                aligned_len as winapi::SIZE_T,
+                                                addr as *mut c_void);
             kernel32::CloseHandle(handle);
 
             if ptr == ptr::null_mut() {
@@ -77,7 +78,7 @@ impl MmapInner {
         }
     }
 
-    pub fn anonymous(len: usize, prot: Protection, _stack: bool) -> io::Result<MmapInner> {
+    pub fn anonymous(len: usize, addr: *mut u8, prot: Protection, _stack: bool) -> io::Result<MmapInner> {
         unsafe {
             // Create a mapping and view with maximum access permissions, then use `VirtualProtect`
             // to set the actual `Protection`. This way, we can set more permissive protection later
@@ -94,11 +95,12 @@ impl MmapInner {
                 return Err(io::Error::last_os_error());
             }
             let access = winapi::FILE_MAP_ALL_ACCESS | winapi::FILE_MAP_EXECUTE;
-            let ptr = kernel32::MapViewOfFile(handle,
-                                              access,
-                                              0,
-                                              0,
-                                              len as winapi::SIZE_T);
+            let ptr = kernel32::MapViewOfFileEx(handle,
+                                                access,
+                                                0,
+                                                0,
+                                                len as winapi::SIZE_T,
+                                                addr as *mut c_void);
             kernel32::CloseHandle(handle);
 
             if ptr == ptr::null_mut() {

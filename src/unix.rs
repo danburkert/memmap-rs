@@ -45,7 +45,7 @@ pub struct MmapInner {
 
 impl MmapInner {
 
-    pub fn open(file: &File, prot: Protection, offset: usize, len: usize) -> io::Result<MmapInner> {
+    pub fn open(file: &File, addr: *mut u8, prot: Protection, offset: usize, len: usize) -> io::Result<MmapInner> {
         let alignment = offset % page_size();
         let aligned_offset = offset - alignment;
         let aligned_len = len + alignment;
@@ -54,12 +54,17 @@ impl MmapInner {
             return Err(io::Error::new(io::ErrorKind::InvalidInput,
                                       "memory map must have a non-zero length"));
         }
-
+        let mut flags = prot.as_flag();
+        if addr != ptr::null_mut() {
+            // a specifiy address was requested
+            flags |= libc::MAP_FIXED;
+        }
+        
         unsafe {
-            let ptr = libc::mmap(ptr::null_mut(),
+            let ptr = libc::mmap(addr as *mut libc::c_void,
                                  aligned_len as libc::size_t,
                                  prot.as_prot(),
-                                 prot.as_flag(),
+                                 flags,
                                  file.as_raw_fd(),
                                  aligned_offset as libc::off_t);
 
@@ -81,9 +86,9 @@ impl MmapInner {
     }
 
     /// Open an anonymous memory map.
-    pub fn anonymous(len: usize, prot: Protection, stack: bool) -> io::Result<MmapInner> {
+    pub fn anonymous(len: usize, addr: *mut u8, prot: Protection, stack: bool) -> io::Result<MmapInner> {
         let ptr = unsafe {
-            libc::mmap(ptr::null_mut(),
+            libc::mmap(addr as *mut libc::c_void,
                        len as libc::size_t,
                        prot.as_prot(),
                        prot.as_flag() | libc::MAP_ANON | MmapInner::stack_as_flag(stack),

@@ -19,6 +19,7 @@ use std::io::{Error, ErrorKind, Result};
 use std::slice;
 use std::usize;
 use std::ops::{Deref, DerefMut};
+use std::ptr;
 
 /// Memory map protection.
 ///
@@ -84,6 +85,7 @@ pub struct AnonymousMmapOptions {
     protection: Option<Protection>,
     len: usize,
     stack: bool,
+    addr: *mut u8
 }
 
 /// Configure a new anonymous mapping of `len` bytes.
@@ -114,6 +116,7 @@ pub fn anonymous(len: usize) -> AnonymousMmapOptions {
         protection: None,
         len: len,
         stack: false,
+        addr: ptr::null_mut()
     }
 }
 
@@ -163,8 +166,36 @@ impl AnonymousMmapOptions {
         self
     }
 
+    /// Set the target address.
+    ///
+    /// The address must be aligned to the system page-size.
+    /// If the address space is already in use, this may (on Unix) replace existing mappings, or cause an error (Windows).
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use std::fs::File;
+    ///
+    /// # fn try_main() -> std::io::Result<()> {
+    /// let file = File::open("README.md")?;
+    ///
+    /// let mmap = unsafe { memmap::file(&file)
+    ///                         .addr(0xDEADBEEF000 as *mut u8)
+    ///                         .map()? };
+    /// assert_eq!(mmap.as_ptr() as usize, 0xDEADBEEF000);
+    /// # Ok(())
+    /// # }
+    /// # fn main() { try_main().unwrap(); }
+    /// ```
+    pub fn addr(&mut self, addr: *mut u8) -> &mut Self {
+        self.addr = addr;
+        self
+    }
+    
     fn map_inner(&self) -> Result<MmapInner> {
-        let inner = try!(MmapInner::anonymous(self.len, self.protection.unwrap(), self.stack));
+        let inner = try!(
+            MmapInner::anonymous(self.len, self.addr, self.protection.unwrap(), self.stack)
+        );
         Ok(inner)
     }
 
@@ -226,6 +257,7 @@ pub struct FileMmapOptions<'a> {
     protection: Option<Protection>,
     offset: usize,
     len: Option<usize>,
+    addr: *mut u8
 }
 
 /// Configure a new file-backed mapping.
@@ -261,6 +293,7 @@ pub unsafe fn file(file: &File) -> FileMmapOptions {
         protection: None,
         offset: 0,
         len: None,
+        addr: ptr::null_mut()
     }
 }
 
@@ -336,6 +369,32 @@ impl<'a> FileMmapOptions<'a> {
         self.protection = Some(protection);
         self
     }
+    
+    /// Set the target address.
+    ///
+    /// The address must be aligned to the system page-size.
+    /// If the address space is already in use, this may (on Unix) replace existing mappings, or cause an error (Windows).
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use std::fs::File;
+    ///
+    /// # fn try_main() -> std::io::Result<()> {
+    /// let file = File::open("README.md")?;
+    ///
+    /// let mmap = unsafe { memmap::file(&file)
+    ///                         .addr(0xCAFEBABE000 as *mut u8)
+    ///                         .map()? };
+    /// assert_eq!(mmap.as_ptr() as usize, 0xCAFEBABE000);
+    /// # Ok(())
+    /// # }
+    /// # fn main() { try_main().unwrap(); }
+    /// ```
+    pub fn addr(&mut self, addr: *mut u8) -> &mut Self {
+        self.addr = addr;
+        self
+    }
 
     fn map_inner(&self) -> Result<MmapInner> {
         let len;
@@ -349,7 +408,9 @@ impl<'a> FileMmapOptions<'a> {
             }
             len = l as usize - self.offset;
         }
-        let inner = try!(MmapInner::open(self.file, self.protection.unwrap(), self.offset, len));
+        let inner = try!(
+            MmapInner::open(self.file, self.addr, self.protection.unwrap(), self.offset, len)
+        );
         Ok(inner)
     }
 
