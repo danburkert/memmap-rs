@@ -59,11 +59,11 @@ impl MmapInner {
             }
 
             let ptr = kernel32::MapViewOfFileEx(handle,
-                                              prot.as_view_flag(),
-                                              (aligned_offset >> 16 >> 16) as winapi::DWORD,
-                                              (aligned_offset & 0xffffffff) as winapi::DWORD,
-                                              aligned_len as winapi::SIZE_T,
-                                              addr as winapi::DWORD);
+                                                prot.as_view_flag(),
+                                                (aligned_offset >> 16 >> 16) as winapi::DWORD,
+                                                (aligned_offset & 0xffffffff) as winapi::DWORD,
+                                                aligned_len as winapi::SIZE_T,
+                                                addr as *mut c_void);
             kernel32::CloseHandle(handle);
 
             if ptr == ptr::null_mut() {
@@ -96,11 +96,11 @@ impl MmapInner {
             }
             let access = winapi::FILE_MAP_ALL_ACCESS | winapi::FILE_MAP_EXECUTE;
             let ptr = kernel32::MapViewOfFileEx(handle,
-                                              access,
-                                              0,
-                                              0,
-                                              len as winapi::SIZE_T,
-                                              addr as winapi::DWORD);
+                                                access,
+                                                0,
+                                                0,
+                                                len as winapi::SIZE_T,
+                                                addr as *mut c_void);
             kernel32::CloseHandle(handle);
 
             if ptr == ptr::null_mut() {
