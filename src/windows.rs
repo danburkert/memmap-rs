@@ -9,10 +9,18 @@ use std::os::windows::io::AsRawHandle;
 
 use self::fs2::FileExt;
 
-use ::Protection;
+use Protection;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum AccessPattern {
+    Normal,
+    Sequential,
+    Random,
+    DontNeed,
+    WillNeed,
+}
 
 impl Protection {
-
     /// Returns the `Protection` as a flag appropriate for a call to `CreateFileMapping`.
     fn as_mapping_flag(self) -> winapi::DWORD {
         match self {
@@ -135,6 +143,10 @@ impl MmapInner {
         } else {
             Err(io::Error::last_os_error())
         }
+    }
+
+    pub fn advise(&self, offset: usize, len: usize, advice: AccessPattern) -> io::Result<()> {
+        Ok(())
     }
 
     pub fn set_protection(&mut self, prot: Protection) -> io::Result<()> {

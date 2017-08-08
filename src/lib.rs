@@ -8,10 +8,16 @@ mod windows;
 #[cfg(windows)]
 use windows::MmapInner;
 
+#[cfg(windows)]
+pub use unix::AccessPattern;
+
 #[cfg(unix)]
 mod unix;
 #[cfg(unix)]
 use unix::MmapInner;
+
+#[cfg(unix)]
+pub use unix::AccessPattern;
 
 use std::fmt;
 use std::fs::File;
@@ -652,6 +658,34 @@ impl MmapMut {
     pub fn flush_async(&self) -> Result<()> {
         let len = self.len();
         self.inner.flush_async(0, len)
+    }
+
+    /// Hints the operating system on the expected access pattern of this section of memory.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// use std::io::Write;
+    /// use std::fs::File;
+    /// use memmap::{Protection, AccessPattern};
+    ///
+    /// # fn try_main() -> std::io::Result<()> {
+    /// let file = File::open("README.md")?;
+    /// let mut mmap = unsafe { memmap::file(&file)
+    ///                             .protection(Protection::ReadWrite)
+    ///                             .map_mut()? };
+    ///
+    /// (&mut mmap[..]).write(b"Hi!")?;
+    /// mmap.advise(0usize, mmap.len(), AccessPattern::Sequential)?;
+    /// for byte in &*mmap {
+    ///     println!("{}", byte);
+    /// }
+    /// # Ok(())
+    /// # }
+    /// # fn main() { try_main().unwrap(); }
+    /// ```
+    pub fn advise(&self, offset: usize, len: usize, advice: AccessPattern) -> Result<()> {
+        self.inner.advise(offset, len, advice)
     }
 
     /// Flushes outstanding memory map modifications in the range to disk.
