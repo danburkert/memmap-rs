@@ -141,8 +141,8 @@ impl MmapInner {
     pub fn advise(&self, offset: usize, len: usize, advice: AccessPattern) -> io::Result<()> {
         unsafe {
             let result = libc::madvise(
-                self.ptr().offset(offset as _) as *mut libc::c_void,
-                len as _,
+                self.ptr().offset(offset as isize) as *mut libc::c_void,
+                len as libc::size_t,
                 advice as libc::c_int,
             );
 
