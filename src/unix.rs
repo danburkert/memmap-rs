@@ -4,10 +4,19 @@ use std::{io, ptr};
 use std::fs::File;
 use std::os::unix::io::AsRawFd;
 
-use ::Protection;
+use Protection;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[repr(i32)]
+pub enum AccessPattern {
+    Normal = libc::MADV_NORMAL,
+    Sequential = libc::MADV_SEQUENTIAL,
+    Random = libc::MADV_RANDOM,
+    DontNeed = libc::MADV_DONTNEED,
+    WillNeed = libc::MADV_WILLNEED,
+}
 
 impl Protection {
-
     /// Returns the `Protection` value as a POSIX protection flag.
     fn as_prot(self) -> libc::c_int {
         match self {
@@ -126,6 +135,22 @@ impl MmapInner {
             Ok(())
         } else {
             Err(io::Error::last_os_error())
+        }
+    }
+
+    pub fn advise(&self, offset: usize, len: usize, advice: AccessPattern) -> io::Result<()> {
+        unsafe {
+            let result = libc::madvise(
+                self.ptr().offset(offset as isize) as *mut libc::c_void,
+                len as libc::size_t,
+                advice as libc::c_int,
+            );
+
+            if result == 0 {
+                Ok(())
+            } else {
+                Err(io::Error::last_os_error())
+            }
         }
     }
 
