@@ -877,7 +877,7 @@ mod test {
         let mut map = Mmap::anonymous(4096, Protection::ReadWrite).unwrap();
 
         {
-            let mut jitmem = unsafe { map.as_mut_slice() };
+            let jitmem = unsafe { map.as_mut_slice() };
             jitmem[0] = 0xB8;   // mov eax, 0xAB
             jitmem[1] = 0xAB;
             jitmem[2] = 0x00;
