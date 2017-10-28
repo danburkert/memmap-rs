@@ -123,7 +123,7 @@ impl MmapOptions {
         self.len
             .map(Ok)
             .unwrap_or_else(|| {
-                let len = try!(file.metadata()).len();
+                let len = file.metadata()?.len();
                 if len > usize::MAX as u64 {
                     return Err(Error::new(ErrorKind::InvalidData, "file length overflows usize"));
                 }
@@ -183,7 +183,7 @@ impl MmapOptions {
     /// # fn main() { try_main().unwrap(); }
     /// ```
     pub unsafe fn map(&self, file: &File) -> Result<Mmap> {
-        MmapInner::map(try!(self.get_len(file)), file, self.offset)
+        MmapInner::map(self.get_len(file)?, file, self.offset)
                   .map(|inner| Mmap { inner: inner })
     }
 
@@ -194,7 +194,7 @@ impl MmapOptions {
     /// This method returns an error when the underlying system call fails, which can happen for a
     /// variety of reasons, such as when the file is not open with read permissions.
     pub unsafe fn map_exec(&self, file: &File) -> Result<Mmap> {
-        MmapInner::map_exec(try!(self.get_len(file)), file, self.offset)
+        MmapInner::map_exec(self.get_len(file)?, file, self.offset)
                   .map(|inner| Mmap { inner: inner })
     }
 
@@ -233,7 +233,7 @@ impl MmapOptions {
     /// # fn main() { try_main().unwrap(); }
     /// ```
     pub unsafe fn map_mut(&self, file: &File) -> Result<MmapMut> {
-        MmapInner::map_mut(try!(self.get_len(file)), file, self.offset)
+        MmapInner::map_mut(self.get_len(file)?, file, self.offset)
                   .map(|inner| MmapMut { inner: inner })
     }
 
@@ -263,7 +263,7 @@ impl MmapOptions {
     /// # fn main() { try_main().unwrap(); }
     /// ```
     pub unsafe fn map_copy(&self, file: &File) -> Result<MmapMut> {
-        MmapInner::map_copy(try!(self.get_len(file)), file, self.offset)
+        MmapInner::map_copy(self.get_len(file)?, file, self.offset)
                   .map(|inner| MmapMut { inner: inner })
     }
 
@@ -385,7 +385,7 @@ impl Mmap {
     /// # fn main() { try_main().unwrap(); }
     /// ```
     pub fn make_mut(mut self) -> Result<MmapMut> {
-        try!(self.inner.make_mut());
+        self.inner.make_mut()?;
         Ok(MmapMut { inner: self.inner })
     }
 }
@@ -578,7 +578,7 @@ impl MmapMut {
     /// # fn main() { try_main().unwrap(); }
     /// ```
     pub fn make_read_only(mut self) -> Result<Mmap> {
-        try!(self.inner.make_read_only());
+        self.inner.make_read_only()?;
         Ok(Mmap { inner: self.inner })
     }
 
@@ -591,7 +591,7 @@ impl MmapMut {
     /// This method returns an error when the underlying system call fails, which can happen for a
     /// variety of reasons, such as when the file has not been opened with execute permissions.
     pub fn make_exec(mut self) -> Result<Mmap> {
-        try!(self.inner.make_exec());
+        self.inner.make_exec()?;
         Ok(Mmap { inner: self.inner })
     }
 }
