@@ -4,7 +4,7 @@ extern crate winapi;
 use std::{io, mem, ptr};
 use std::fs::File;
 use std::os::raw::c_void;
-use std::os::windows::io::{RawHandle, AsRawHandle};
+use std::os::windows::io::{AsRawHandle, RawHandle};
 
 pub struct MmapInner {
     file: Option<File>,
@@ -14,36 +14,41 @@ pub struct MmapInner {
 }
 
 impl MmapInner {
-
     /// Creates a new `MmapInner`.
     ///
     /// This is a thin wrapper around the `CreateFileMappingW` and `MapViewOfFile` system calls.
-    pub fn new(file: &File,
-               protect: winapi::DWORD,
-               access: winapi::DWORD,
-               offset: usize,
-               len: usize,
-               copy: bool) -> io::Result<MmapInner> {
+    pub fn new(
+        file: &File,
+        protect: winapi::DWORD,
+        access: winapi::DWORD,
+        offset: usize,
+        len: usize,
+        copy: bool,
+    ) -> io::Result<MmapInner> {
         let alignment = offset % allocation_granularity();
         let aligned_offset = offset - alignment;
         let aligned_len = len + alignment;
 
         unsafe {
-            let handle = kernel32::CreateFileMappingW(file.as_raw_handle(),
-                                                      ptr::null_mut(),
-                                                      protect,
-                                                      0,
-                                                      0,
-                                                      ptr::null());
+            let handle = kernel32::CreateFileMappingW(
+                file.as_raw_handle(),
+                ptr::null_mut(),
+                protect,
+                0,
+                0,
+                ptr::null(),
+            );
             if handle == ptr::null_mut() {
                 return Err(io::Error::last_os_error());
             }
 
-            let ptr = kernel32::MapViewOfFile(handle,
-                                              access,
-                                              (aligned_offset >> 16 >> 16) as winapi::DWORD,
-                                              (aligned_offset & 0xffffffff) as winapi::DWORD,
-                                              aligned_len as winapi::SIZE_T);
+            let ptr = kernel32::MapViewOfFile(
+                handle,
+                access,
+                (aligned_offset >> 16 >> 16) as winapi::DWORD,
+                (aligned_offset & 0xffffffff) as winapi::DWORD,
+                aligned_len as winapi::SIZE_T,
+            );
             kernel32::CloseHandle(handle);
 
             if ptr == ptr::null_mut() {
@@ -67,15 +72,15 @@ impl MmapInner {
             (true, true) => {
                 access |= winapi::FILE_MAP_WRITE | winapi::FILE_MAP_EXECUTE;
                 winapi::PAGE_EXECUTE_READWRITE
-            },
+            }
             (true, false) => {
                 access |= winapi::FILE_MAP_WRITE;
                 winapi::PAGE_READWRITE
-            },
+            }
             (false, true) => {
                 access |= winapi::FILE_MAP_EXECUTE;
                 winapi::PAGE_EXECUTE_READ
-            },
+            }
             (false, false) => winapi::PAGE_READONLY,
         };
 
@@ -144,21 +149,19 @@ impl MmapInner {
             // on.
             // Also see https://msdn.microsoft.com/en-us/library/windows/desktop/aa366537.aspx
 
-            let handle = kernel32::CreateFileMappingW(winapi::INVALID_HANDLE_VALUE,
-                                                      ptr::null_mut(),
-                                                      winapi::PAGE_EXECUTE_READWRITE,
-                                                      (len >> 16 >> 16) as winapi::DWORD,
-                                                      (len & 0xffffffff) as winapi::DWORD,
-                                                      ptr::null());
+            let handle = kernel32::CreateFileMappingW(
+                winapi::INVALID_HANDLE_VALUE,
+                ptr::null_mut(),
+                winapi::PAGE_EXECUTE_READWRITE,
+                (len >> 16 >> 16) as winapi::DWORD,
+                (len & 0xffffffff) as winapi::DWORD,
+                ptr::null(),
+            );
             if handle == ptr::null_mut() {
                 return Err(io::Error::last_os_error());
             }
             let access = winapi::FILE_MAP_ALL_ACCESS | winapi::FILE_MAP_EXECUTE;
-            let ptr = kernel32::MapViewOfFile(handle,
-                                              access,
-                                              0,
-                                              0,
-                                              len as winapi::SIZE_T);
+            let ptr = kernel32::MapViewOfFile(handle, access, 0, 0, len as winapi::SIZE_T);
             kernel32::CloseHandle(handle);
 
             if ptr == ptr::null_mut() {
@@ -166,10 +169,12 @@ impl MmapInner {
             }
 
             let mut old = 0;
-            let result = kernel32::VirtualProtect(ptr,
-                                                  len as winapi::SIZE_T,
-                                                  winapi::PAGE_READWRITE,
-                                                  &mut old);
+            let result = kernel32::VirtualProtect(
+                ptr,
+                len as winapi::SIZE_T,
+                winapi::PAGE_READWRITE,
+                &mut old,
+            );
             if result != 0 {
                 Ok(MmapInner {
                     file: None,
@@ -192,8 +197,9 @@ impl MmapInner {
     }
 
     pub fn flush_async(&self, offset: usize, len: usize) -> io::Result<()> {
-        let result = unsafe { kernel32::FlushViewOfFile(self.ptr.offset(offset as isize),
-                                                        len as winapi::SIZE_T) };
+        let result = unsafe {
+            kernel32::FlushViewOfFile(self.ptr.offset(offset as isize), len as winapi::SIZE_T)
+        };
         if result != 0 {
             Ok(())
         } else {
@@ -204,14 +210,11 @@ impl MmapInner {
     fn virtual_protect(&mut self, protect: winapi::DWORD) -> io::Result<()> {
         unsafe {
             let alignment = self.ptr as usize % allocation_granularity();
-            let ptr = self.ptr.offset(- (alignment as isize));
+            let ptr = self.ptr.offset(-(alignment as isize));
             let aligned_len = self.len as winapi::SIZE_T + alignment as winapi::SIZE_T;
 
             let mut old = 0;
-            let result = kernel32::VirtualProtect(ptr,
-                                                  aligned_len,
-                                                  protect,
-                                                  &mut old);
+            let result = kernel32::VirtualProtect(ptr, aligned_len, protect, &mut old);
 
             if result != 0 {
                 Ok(())
@@ -258,24 +261,23 @@ impl Drop for MmapInner {
     fn drop(&mut self) {
         let alignment = self.ptr as usize % allocation_granularity();
         unsafe {
-            let ptr = self.ptr.offset(- (alignment as isize));
-            assert!(kernel32::UnmapViewOfFile(ptr) != 0,
-                    "unable to unmap mmap: {}", io::Error::last_os_error());
+            let ptr = self.ptr.offset(-(alignment as isize));
+            assert!(
+                kernel32::UnmapViewOfFile(ptr) != 0,
+                "unable to unmap mmap: {}",
+                io::Error::last_os_error()
+            );
         }
     }
 }
 
-unsafe impl Sync for MmapInner { }
-unsafe impl Send for MmapInner { }
+unsafe impl Sync for MmapInner {}
+unsafe impl Send for MmapInner {}
 
 fn protection_supported(handle: RawHandle, protection: winapi::DWORD) -> bool {
     unsafe {
-        let handle = kernel32::CreateFileMappingW(handle,
-                                                  ptr::null_mut(),
-                                                  protection,
-                                                  0,
-                                                  0,
-                                                  ptr::null());
+        let handle =
+            kernel32::CreateFileMappingW(handle, ptr::null_mut(), protection, 0, 0, ptr::null());
         if handle == ptr::null_mut() {
             return false;
         }

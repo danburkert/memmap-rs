@@ -32,7 +32,6 @@ pub struct MmapOptions {
 }
 
 impl MmapOptions {
-
     /// Creates a new set of options for configuring and creating a memory map.
     ///
     /// # Example
@@ -120,15 +119,16 @@ impl MmapOptions {
 
     /// Returns the configured length, or the length of the provided file.
     fn get_len(&self, file: &File) -> Result<usize> {
-        self.len
-            .map(Ok)
-            .unwrap_or_else(|| {
-                let len = file.metadata()?.len();
-                if len > usize::MAX as u64 {
-                    return Err(Error::new(ErrorKind::InvalidData, "file length overflows usize"));
-                }
-                Ok(len as usize - self.offset)
-            })
+        self.len.map(Ok).unwrap_or_else(|| {
+            let len = file.metadata()?.len();
+            if len > (usize::MAX as u64) {
+                return Err(Error::new(
+                    ErrorKind::InvalidData,
+                    "file length overflows usize",
+                ));
+            }
+            Ok(len as usize - self.offset)
+        })
     }
 
     /// Configures the anonymous memory map to be suitable for a process or thread stack.
@@ -183,8 +183,7 @@ impl MmapOptions {
     /// # fn main() { try_main().unwrap(); }
     /// ```
     pub unsafe fn map(&self, file: &File) -> Result<Mmap> {
-        MmapInner::map(self.get_len(file)?, file, self.offset)
-                  .map(|inner| Mmap { inner: inner })
+        MmapInner::map(self.get_len(file)?, file, self.offset).map(|inner| Mmap { inner: inner })
     }
 
     /// Creates a readable and executable memory map backed by a file.
@@ -195,7 +194,7 @@ impl MmapOptions {
     /// variety of reasons, such as when the file is not open with read permissions.
     pub unsafe fn map_exec(&self, file: &File) -> Result<Mmap> {
         MmapInner::map_exec(self.get_len(file)?, file, self.offset)
-                  .map(|inner| Mmap { inner: inner })
+            .map(|inner| Mmap { inner: inner })
     }
 
     /// Creates a writeable memory map backed by a file.
@@ -234,7 +233,7 @@ impl MmapOptions {
     /// ```
     pub unsafe fn map_mut(&self, file: &File) -> Result<MmapMut> {
         MmapInner::map_mut(self.get_len(file)?, file, self.offset)
-                  .map(|inner| MmapMut { inner: inner })
+            .map(|inner| MmapMut { inner: inner })
     }
 
     /// Creates a copy-on-write memory map backed by a file.
@@ -264,7 +263,7 @@ impl MmapOptions {
     /// ```
     pub unsafe fn map_copy(&self, file: &File) -> Result<MmapMut> {
         MmapInner::map_copy(self.get_len(file)?, file, self.offset)
-                  .map(|inner| MmapMut { inner: inner })
+            .map(|inner| MmapMut { inner: inner })
     }
 
     /// Creates an anonymous memory map.
@@ -276,8 +275,7 @@ impl MmapOptions {
     ///
     /// This method returns an error when the underlying system call fails.
     pub fn map_anon(&self) -> Result<MmapMut> {
-        MmapInner::map_anon(self.len.unwrap_or(0), self.stack)
-                  .map(|inner| MmapMut { inner: inner })
+        MmapInner::map_anon(self.len.unwrap_or(0), self.stack).map(|inner| MmapMut { inner: inner })
     }
 }
 
@@ -307,11 +305,10 @@ impl MmapOptions {
 ///
 /// See `MmapMut` for the mutable version.
 pub struct Mmap {
-    inner: MmapInner
+    inner: MmapInner,
 }
 
 impl Mmap {
-
     /// Creates a read-only memory map backed by a file.
     ///
     /// This is equivalent to calling `MmapOptions::new().map(file)`.
@@ -393,9 +390,7 @@ impl Mmap {
 impl Deref for Mmap {
     type Target = [u8];
     fn deref(&self) -> &[u8] {
-        unsafe {
-            slice::from_raw_parts(self.inner.ptr(), self.inner.len())
-        }
+        unsafe { slice::from_raw_parts(self.inner.ptr(), self.inner.len()) }
     }
 }
 
@@ -416,11 +411,10 @@ impl fmt::Debug for Mmap {
 ///
 /// See `Mmap` for the immutable version.
 pub struct MmapMut {
-    inner: MmapInner
+    inner: MmapInner,
 }
 
 impl MmapMut {
-
     /// Creates a writeable memory map backed by a file.
     ///
     /// This is equivalent to calling `MmapOptions::new().map_mut(file)`.
@@ -599,17 +593,13 @@ impl MmapMut {
 impl Deref for MmapMut {
     type Target = [u8];
     fn deref(&self) -> &[u8] {
-        unsafe {
-            slice::from_raw_parts(self.inner.ptr(), self.inner.len())
-        }
+        unsafe { slice::from_raw_parts(self.inner.ptr(), self.inner.len()) }
     }
 }
 
 impl DerefMut for MmapMut {
     fn deref_mut(&mut self) -> &mut [u8] {
-        unsafe {
-            slice::from_raw_parts_mut(self.inner.mut_ptr(), self.inner.len())
-        }
+        unsafe { slice::from_raw_parts_mut(self.inner.mut_ptr(), self.inner.len()) }
     }
 }
 
@@ -636,11 +626,7 @@ mod test {
     use std::sync::Arc;
     use std::thread;
 
-    use super::{
-        Mmap,
-        MmapMut,
-        MmapOptions,
-    };
+    use super::{Mmap, MmapMut, MmapOptions};
 
     #[test]
     fn map_file() {
@@ -649,10 +635,11 @@ mod test {
         let path = tempdir.path().join("mmap");
 
         let file = OpenOptions::new()
-                        .read(true)
-                        .write(true)
-                        .create(true)
-                        .open(&path).unwrap();
+            .read(true)
+            .write(true)
+            .create(true)
+            .open(&path)
+            .unwrap();
 
         file.set_len(expected_len as u64).unwrap();
 
@@ -680,10 +667,11 @@ mod test {
         let path = tempdir.path().join("mmap");
 
         let file = OpenOptions::new()
-                        .read(true)
-                        .write(true)
-                        .create(true)
-                        .open(&path).unwrap();
+            .read(true)
+            .write(true)
+            .create(true)
+            .open(&path)
+            .unwrap();
         let mmap = unsafe { Mmap::map(&file) };
         assert!(mmap.is_err());
     }
@@ -719,10 +707,11 @@ mod test {
         let path = tempdir.path().join("mmap");
 
         let mut file = OpenOptions::new()
-                                   .read(true)
-                                   .write(true)
-                                   .create(true)
-                                   .open(&path).unwrap();
+            .read(true)
+            .write(true)
+            .create(true)
+            .open(&path)
+            .unwrap();
         file.set_len(128).unwrap();
 
         let write = b"abc123";
@@ -742,17 +731,21 @@ mod test {
         let path = tempdir.path().join("mmap");
 
         let file = OpenOptions::new()
-                               .read(true)
-                               .write(true)
-                               .create(true)
-                               .open(&path).unwrap();
+            .read(true)
+            .write(true)
+            .create(true)
+            .open(&path)
+            .unwrap();
         file.set_len(128).unwrap();
         let write = b"abc123";
 
-        let mut mmap = unsafe { MmapOptions::new().offset(2)
-                                                  .len(write.len())
-                                                  .map_mut(&file)
-                                                  .unwrap() };
+        let mut mmap = unsafe {
+            MmapOptions::new()
+                .offset(2)
+                .len(write.len())
+                .map_mut(&file)
+                .unwrap()
+        };
         (&mut mmap[..]).write_all(write).unwrap();
         mmap.flush_range(0, write.len()).unwrap();
     }
@@ -763,10 +756,11 @@ mod test {
         let path = tempdir.path().join("mmap");
 
         let mut file = OpenOptions::new()
-                                   .read(true)
-                                   .write(true)
-                                   .create(true)
-                                   .open(&path).unwrap();
+            .read(true)
+            .write(true)
+            .create(true)
+            .open(&path)
+            .unwrap();
         file.set_len(128).unwrap();
 
         let nulls = b"\0\0\0\0\0\0";
@@ -798,21 +792,24 @@ mod test {
         let path = tempdir.path().join("mmap");
 
         let file = OpenOptions::new()
-                               .read(true)
-                               .write(true)
-                               .create(true)
-                               .open(&path)
-                               .unwrap();
+            .read(true)
+            .write(true)
+            .create(true)
+            .open(&path)
+            .unwrap();
 
         file.set_len(500000 as u64).unwrap();
 
         let offset = 5099;
         let len = 50050;
 
-        let mut mmap = unsafe { MmapOptions::new().offset(offset)
-                                                  .len(len)
-                                                  .map_mut(&file)
-                                                  .unwrap() };
+        let mut mmap = unsafe {
+            MmapOptions::new()
+                .offset(offset)
+                .len(len)
+                .map_mut(&file)
+                .unwrap()
+        };
         assert_eq!(len, mmap.len());
 
         let zeros = vec![0; len];
@@ -846,12 +843,12 @@ mod test {
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     fn jit_x86(mut mmap: MmapMut) {
         use std::mem;
-        mmap[0] = 0xB8;   // mov eax, 0xAB
+        mmap[0] = 0xB8; // mov eax, 0xAB
         mmap[1] = 0xAB;
         mmap[2] = 0x00;
         mmap[3] = 0x00;
         mmap[4] = 0x00;
-        mmap[5] = 0xC3;   // ret
+        mmap[5] = 0xC3; // ret
 
         let mmap = mmap.make_exec().expect("make_exec");
 
@@ -871,15 +868,17 @@ mod test {
         let tempdir = tempdir::TempDir::new("mmap").unwrap();
         let mut options = OpenOptions::new();
         #[cfg(windows)]
-        options.access_mode(winapi::winnt::GENERIC_EXECUTE
-                            | winapi::winnt::GENERIC_READ
-                            | winapi::winnt::GENERIC_WRITE);
+        options.access_mode(
+            winapi::winnt::GENERIC_EXECUTE | winapi::winnt::GENERIC_READ
+                | winapi::winnt::GENERIC_WRITE,
+        );
 
-        let file = options.read(true)
-                          .write(true)
-                          .create(true)
-                          .open(&tempdir.path().join("jit_x86"))
-                          .expect("open");
+        let file = options
+            .read(true)
+            .write(true)
+            .create(true)
+            .open(&tempdir.path().join("jit_x86"))
+            .expect("open");
 
         file.set_len(4096).expect("set_len");
         jit_x86(unsafe { MmapMut::map_mut(&file).expect("map_mut") });
@@ -892,15 +891,17 @@ mod test {
 
         let mut options = OpenOptions::new();
         #[cfg(windows)]
-        options.access_mode(winapi::winnt::GENERIC_EXECUTE
-                            | winapi::winnt::GENERIC_READ
-                            | winapi::winnt::GENERIC_WRITE);
+        options.access_mode(
+            winapi::winnt::GENERIC_EXECUTE | winapi::winnt::GENERIC_READ
+                | winapi::winnt::GENERIC_WRITE,
+        );
 
-        let mut file = options.read(true)
-                              .write(true)
-                              .create(true)
-                              .open(&path)
-                              .expect("open");
+        let mut file = options
+            .read(true)
+            .write(true)
+            .create(true)
+            .open(&path)
+            .expect("open");
         file.set_len(256 as u64).expect("set_len");
 
         let mmap = unsafe { MmapMut::map_mut(&file).expect("map_mut") };
@@ -939,15 +940,17 @@ mod test {
 
         let mut options = OpenOptions::new();
         #[cfg(windows)]
-        options.access_mode(winapi::winnt::GENERIC_EXECUTE
-                            | winapi::winnt::GENERIC_READ
-                            | winapi::winnt::GENERIC_WRITE);
+        options.access_mode(
+            winapi::winnt::GENERIC_EXECUTE | winapi::winnt::GENERIC_READ
+                | winapi::winnt::GENERIC_WRITE,
+        );
 
-        let mut file = options.read(true)
-                              .write(true)
-                              .create(true)
-                              .open(&path)
-                              .expect("open");
+        let mut file = options
+            .read(true)
+            .write(true)
+            .create(true)
+            .open(&path)
+            .expect("open");
         file.set_len(256 as u64).expect("set_len");
 
         let mmap = unsafe { MmapOptions::new().map_copy(&file).expect("map_mut") };
