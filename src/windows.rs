@@ -1,4 +1,3 @@
-extern crate fs2;
 extern crate kernel32;
 extern crate winapi;
 
@@ -6,8 +5,6 @@ use std::{io, mem, ptr};
 use std::fs::File;
 use std::os::raw::c_void;
 use std::os::windows::io::{RawHandle, AsRawHandle};
-
-use self::fs2::FileExt;
 
 pub struct MmapInner {
     file: Option<File>,
@@ -53,7 +50,7 @@ impl MmapInner {
                 Err(io::Error::last_os_error())
             } else {
                 Ok(MmapInner {
-                    file: Some(try!(file.duplicate())),
+                    file: Some(file.try_clone()?),
                     ptr: ptr.offset(alignment as isize),
                     len: len as usize,
                     copy: copy,
@@ -82,9 +79,9 @@ impl MmapInner {
             (false, false) => winapi::PAGE_READONLY,
         };
 
-        let mut inner = try!(MmapInner::new(file, protection, access, offset, len, false));
+        let mut inner = MmapInner::new(file, protection, access, offset, len, false)?;
         if write || exec {
-            try!(inner.make_read_only());
+            inner.make_read_only()?;
         }
         Ok(inner)
     }
@@ -99,9 +96,9 @@ impl MmapInner {
             winapi::PAGE_EXECUTE_READ
         };
 
-        let mut inner = try!(MmapInner::new(file, protection, access, offset, len, false));
+        let mut inner = MmapInner::new(file, protection, access, offset, len, false)?;
         if write {
-            try!(inner.make_exec());
+            inner.make_exec()?;
         }
         Ok(inner)
     }
@@ -116,9 +113,9 @@ impl MmapInner {
             winapi::PAGE_READWRITE
         };
 
-        let mut inner = try!(MmapInner::new(file, protection, access, offset, len, false));
+        let mut inner = MmapInner::new(file, protection, access, offset, len, false)?;
         if exec {
-            try!(inner.make_mut());
+            inner.make_mut()?;
         }
         Ok(inner)
     }
@@ -133,9 +130,9 @@ impl MmapInner {
             winapi::PAGE_WRITECOPY
         };
 
-        let mut inner = try!(MmapInner::new(file, protection, access, offset, len, true));
+        let mut inner = MmapInner::new(file, protection, access, offset, len, true)?;
         if exec {
-            try!(inner.make_mut());
+            inner.make_mut()?;
         }
         Ok(inner)
     }
@@ -187,9 +184,9 @@ impl MmapInner {
     }
 
     pub fn flush(&self, offset: usize, len: usize) -> io::Result<()> {
-        try!(self.flush_async(offset, len));
+        self.flush_async(offset, len)?;
         if let Some(ref file) = self.file {
-            try!(file.sync_data());
+            file.sync_data()?;
         }
         Ok(())
     }
