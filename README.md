@@ -2,9 +2,10 @@
 
 A Rust library for cross-platform memory mapped IO.
 
-[Documentation](https://docs.rs/memmap)
-[![Linux Status](https://travis-ci.org/danburkert/memmap-rs.svg?branch=master)](https://travis-ci.org/danburkert/memmap-rs)
-[![Build status](https://ci.appveyor.com/api/projects/status/ubka00959pstatkg/branch/master?svg=true)](https://ci.appveyor.com/project/danburkert/mmap)
+[![Build Status](https://travis-ci.org/danburkert/memmap-rs.svg?branch=master)](https://travis-ci.org/danburkert/memmap-rs)
+[![Windows Build Status](https://ci.appveyor.com/api/projects/status/ubka00959pstatkg/branch/master?svg=true)](https://ci.appveyor.com/project/danburkert/mmap)
+[![Documentation](https://docs.rs/memmap/badge.svg)](https://docs.rs/memmap)
+[![Crate](https://img.shields.io/crates/v/memmap.svg)](https://crates.io/crates/memmap)
 
 ## Features
 
