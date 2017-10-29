@@ -1,10 +1,8 @@
 # memmap
 
-A Rust library for cross-platform memory mapped file IO. `memmap` requires Rust
-stable 1.8 or greater.
+A Rust library for cross-platform memory mapped IO.
 
 [Documentation](https://docs.rs/memmap)
-
 [![Linux Status](https://travis-ci.org/danburkert/memmap-rs.svg?branch=master)](https://travis-ci.org/danburkert/memmap-rs)
 [![Build status](https://ci.appveyor.com/api/projects/status/ubka00959pstatkg/branch/master?svg=true)](https://ci.appveyor.com/project/danburkert/mmap)
 
@@ -23,6 +21,7 @@ stable 1.8 or greater.
 
 `memmap` should work on any platform supported by
 [`libc`](https://github.com/rust-lang-nursery/libc#platforms-and-documentation).
+`memmap` requires Rust stable 1.13 or greater.
 
 `memmap` is continuously tested on:
   * `x86_64-unknown-linux-gnu` (Linux)
