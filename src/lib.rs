@@ -78,8 +78,8 @@ impl MmapOptions {
     ///                 .offset(10)
     ///                 .map(&File::open("README.md")?)?
     /// };
-    /// assert_eq!(&b"A Rust library for cross-platform memory mapped file IO."[..],
-    ///            &mmap[..56]);
+    /// assert_eq!(&b"A Rust library for cross-platform memory mapped IO."[..],
+    ///            &mmap[..51]);
     /// # Ok(())
     /// # }
     /// # fn main() { try_main().unwrap(); }
