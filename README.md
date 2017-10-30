@@ -35,7 +35,7 @@ A Rust library for cross-platform memory mapped IO.
   * `x86_64-pc-windows-gnu`
   * `i686-pc-windows-gnu`
 
-`memmap` is continuously cross-compile against:
+`memmap` is continuously cross-compiled against:
   * `arm-linux-androideabi` (Android)
   * `aarch64-unknown-linux-gnu` (ARM)
   * `arm-unknown-linux-gnueabihf`
