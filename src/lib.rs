@@ -389,6 +389,8 @@ impl Mmap {
 
 impl Deref for Mmap {
     type Target = [u8];
+
+    #[inline]
     fn deref(&self) -> &[u8] {
         unsafe { slice::from_raw_parts(self.inner.ptr(), self.inner.len()) }
     }
@@ -592,12 +594,15 @@ impl MmapMut {
 
 impl Deref for MmapMut {
     type Target = [u8];
+
+    #[inline]
     fn deref(&self) -> &[u8] {
         unsafe { slice::from_raw_parts(self.inner.ptr(), self.inner.len()) }
     }
 }
 
 impl DerefMut for MmapMut {
+    #[inline]
     fn deref_mut(&mut self) -> &mut [u8] {
         unsafe { slice::from_raw_parts_mut(self.inner.mut_ptr(), self.inner.len()) }
     }

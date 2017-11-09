@@ -168,14 +168,17 @@ impl MmapInner {
         self.mprotect(libc::PROT_READ | libc::PROT_WRITE)
     }
 
+    #[inline]
     pub fn ptr(&self) -> *const u8 {
         self.ptr as *const u8
     }
 
+    #[inline]
     pub fn mut_ptr(&mut self) -> *mut u8 {
         self.ptr as *mut u8
     }
 
+    #[inline]
     pub fn len(&self) -> usize {
         self.len
     }
