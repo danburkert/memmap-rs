@@ -1,6 +1,6 @@
 //! A cross-platform Rust API for memory mapped buffers.
 
-#![doc(html_root_url = "https://docs.rs/memmap/0.6.0")]
+#![doc(html_root_url = "https://docs.rs/memmap/0.6.1")]
 
 #[cfg(windows)]
 mod windows;
