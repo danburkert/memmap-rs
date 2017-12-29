@@ -396,6 +396,12 @@ impl Deref for Mmap {
     }
 }
 
+impl AsRef<[u8]> for Mmap {
+    fn as_ref(&self) -> &[u8] {
+        self.deref()
+    }
+}
+
 impl fmt::Debug for Mmap {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         fmt.debug_struct("Mmap")
@@ -605,6 +611,18 @@ impl DerefMut for MmapMut {
     #[inline]
     fn deref_mut(&mut self) -> &mut [u8] {
         unsafe { slice::from_raw_parts_mut(self.inner.mut_ptr(), self.inner.len()) }
+    }
+}
+
+impl AsRef<[u8]> for MmapMut {
+    fn as_ref(&self) -> &[u8] {
+        self.deref()
+    }
+}
+
+impl AsMut<[u8]> for MmapMut {
+    fn as_mut(&mut self) -> &mut [u8] {
+        self.deref_mut()
     }
 }
 
