@@ -112,6 +112,13 @@ impl MmapInner {
         )
     }
 
+    pub fn try_clone(&self) -> io::Result<Self> {
+        Ok(MmapInner {
+            ptr: self.ptr,
+            len: self.len,
+        })
+    }
+
     pub fn flush(&self, offset: usize, len: usize) -> io::Result<()> {
         let alignment = (self.ptr as usize + offset) % page_size();
         let offset = offset as isize - alignment as isize;

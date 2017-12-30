@@ -188,6 +188,22 @@ impl MmapInner {
         }
     }
 
+    pub fn try_clone(&self) -> io::Result<Self> {
+        let file;
+        if let Some(ref this_file) = self.file {
+            file = Some(this_file.try_clone()?);
+        } else {
+            file = None;
+        }
+
+        Ok(MmapInner {
+            file,
+            ptr: self.ptr,
+            len: self.len,
+            copy: self.copy,
+        })
+    }
+
     pub fn flush(&self, offset: usize, len: usize) -> io::Result<()> {
         self.flush_async(offset, len)?;
         if let Some(ref file) = self.file {
