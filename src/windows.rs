@@ -189,10 +189,11 @@ impl MmapInner {
     }
 
     pub fn try_clone(&self) -> io::Result<Self> {
+        let file;
         if let Some(file) = self.file {
-            let file = file.try_clone()?;
+            file = file.try_clone()?;
         } else {
-            let file = None;
+            file = None;
         }
 
         Ok(MmapInner {
