@@ -385,6 +385,47 @@ impl Mmap {
         self.inner.make_mut()?;
         Ok(MmapMut { inner: self.inner })
     }
+
+    /// Creates a new independently owned handle to the underlying memory map.
+    ///
+    /// # Safety
+    /// 
+    /// This is highly unsafe since clonned copies can be made into `MmapMut`
+    /// and mutability rules will be violated.
+    /// 
+    /// # Errors
+    /// 
+    /// This method returns an error when failed to clone underlying file (`File::try_clone`) on windows.
+    /// 
+    /// # Example
+    /// 
+    /// ```
+    /// # extern crate memmap;
+    /// # extern crate tempdir;
+    /// use memmap::Mmap;
+    /// # use std::fs::OpenOptions;
+    /// 
+    /// # fn try_main() -> std::io::Result<()> {
+    /// # let tempdir = tempdir::TempDir::new("mmap")?;
+    /// let file = /* file opened with read permissions */
+    /// #          OpenOptions::new()
+    /// #                      .read(true)
+    /// #                      .write(true)
+    /// #                      .create(true)
+    /// #                      .open(tempdir.path()
+    /// #                      .join("try_clone"))?;
+    /// # file.set_len(128)?;
+    /// let first = unsafe { Mmap::map(&file)? };
+    /// let second = unsafe { first.try_clone()? };
+    /// assert_eq!(*first, *second);
+    /// # Ok(()) }
+    /// # fn main() { try_main().unwrap(); }
+    /// ```
+    pub unsafe fn try_clone(&self) -> Result<Self> {
+        Ok(Mmap {
+            inner: self.inner.try_clone()?,
+        })
+    }
 }
 
 impl Deref for Mmap {
@@ -596,6 +637,55 @@ impl MmapMut {
         self.inner.make_exec()?;
         Ok(Mmap { inner: self.inner })
     }
+
+    /// Creates a new independently owned handle to the underlying memory map.
+    ///
+    /// # Safety
+    /// 
+    /// This is *incredibly* unsafe for a number of reasons.
+    /// 
+    /// If `make_read_only` or `make_exec` is invoked and write is attempted
+    /// to any clone then segfault will happen.
+    /// 
+    /// Since clones share shame memory and both `Mmap` and `MmapMut` are `Send + Sync`
+    /// thread safety can be easily violated.
+    /// 
+    /// # Errors
+    /// 
+    /// This method returns an error when failed to clone underlying file (`File::try_clone`) on windows.
+    /// 
+    /// # Example
+    /// 
+    /// ```
+    /// # extern crate memmap;
+    /// # extern crate tempdir;
+    /// use memmap::MmapMut;
+    /// use std::io::Write;
+    /// # use std::fs::OpenOptions;
+    /// 
+    /// # fn try_main() -> std::io::Result<()> {
+    /// # let tempdir = tempdir::TempDir::new("mmap")?;
+    /// let file = /* file opened with write permissions */
+    /// #          OpenOptions::new()
+    /// #                      .read(true)
+    /// #                      .write(true)
+    /// #                      .create(true)
+    /// #                      .open(tempdir.path()
+    /// #                      .join("try_clone_mut"))?;
+    /// # file.set_len(128)?;
+    /// let mut first = unsafe { MmapMut::map_mut(&file)? };
+    /// let second = unsafe { first.try_clone()? };
+    /// (&mut first[..]).write_all(b"foobar")?;
+    /// assert!(first.starts_with(b"foobar"));
+    /// assert_eq!(*first, *second);
+    /// # Ok(()) }
+    /// # fn main() { try_main().unwrap(); }
+    /// ```
+    pub unsafe fn try_clone(&self) -> Result<Self> {
+        Ok(MmapMut {
+            inner: self.inner.try_clone()?,
+        })
+    }
 }
 
 impl Deref for MmapMut {
@@ -645,7 +735,7 @@ mod test {
     use std::fs::OpenOptions;
     #[cfg(windows)]
     use std::os::windows::fs::OpenOptionsExt;
-    use std::io::{Read, Write};
+    use std::io::{Read, Seek, SeekFrom, Write};
     use std::sync::Arc;
     use std::thread;
 
@@ -1014,5 +1104,61 @@ mod test {
         let mmap = mmap.make_mut().expect("make_mut");
         let mmap = mmap.make_exec().expect("make_exec");
         drop(mmap);
+    }
+
+    #[test]
+    fn try_clone() {
+        // create test file
+        let tempdir = tempdir::TempDir::new("mmap").unwrap();
+        let path = tempdir.path().join("mmap");
+        let mut file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .open(&path)
+            .expect("open");
+
+        let write = b"foobar";
+        file.write_all(write).expect("write_all");
+        let rewrite = b"ninini";
+
+        {
+            let first = unsafe { Mmap::map(&file).expect("map") };
+            let second = unsafe { first.try_clone().expect("try_clone") };
+            assert_eq!(*first, *second);
+            assert_eq!(&*first, write.as_ref());
+        }
+
+        {
+            let mut first = unsafe { MmapMut::map_mut(&file).expect("map_mut") };
+            let second = unsafe { first.try_clone().expect("try_clone mut") };
+
+            assert_eq!(*first, *second);
+            assert_eq!(&*first, write.as_ref());
+
+            (&mut first[..]).write_all(rewrite).expect("rewrite");
+            assert_eq!(*first, *second);
+            assert_eq!(&*second, rewrite.as_ref());
+            first.flush().expect("flush");
+
+            let mut file_content = Vec::new();
+            file.seek(SeekFrom::Start(0)).expect("seek");
+            file.read_to_end(&mut file_content).expect("read_to_end");
+            assert_eq!(*first, *second);
+            assert_eq!(file_content.as_slice(), &*first);
+        }
+
+        {
+            let mut first = MmapMut::map_anon(6).expect("map_anon");
+            let mut second = unsafe { first.try_clone().expect("try_clone anon") };
+
+            (&mut first[..]).write_all(write).expect("write_all anon");
+            assert_eq!(*first, *second);
+
+            (&mut second[..])
+                .write_all(rewrite)
+                .expect("write_all anon");
+            assert_eq!(*first, *second);
+        }
     }
 }
