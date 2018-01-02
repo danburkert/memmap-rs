@@ -397,6 +397,7 @@ impl Deref for Mmap {
 }
 
 impl AsRef<[u8]> for Mmap {
+    #[inline]
     fn as_ref(&self) -> &[u8] {
         self.deref()
     }
@@ -615,12 +616,14 @@ impl DerefMut for MmapMut {
 }
 
 impl AsRef<[u8]> for MmapMut {
+    #[inline]
     fn as_ref(&self) -> &[u8] {
         self.deref()
     }
 }
 
 impl AsMut<[u8]> for MmapMut {
+    #[inline]
     fn as_mut(&mut self) -> &mut [u8] {
         self.deref_mut()
     }
