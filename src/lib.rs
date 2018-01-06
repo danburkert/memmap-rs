@@ -3,6 +3,8 @@
 #![doc(html_root_url = "https://docs.rs/memmap/0.6.0")]
 
 #[cfg(windows)]
+extern crate winapi;
+#[cfg(windows)]
 mod windows;
 #[cfg(windows)]
 use windows::MmapInner;
@@ -631,6 +633,9 @@ mod test {
     use std::sync::Arc;
     use std::thread;
 
+    #[cfg(windows)]
+    use winapi::um::winnt::GENERIC_ALL;
+
     use super::{Mmap, MmapMut, MmapOptions};
 
     #[test]
@@ -873,10 +878,7 @@ mod test {
         let tempdir = tempdir::TempDir::new("mmap").unwrap();
         let mut options = OpenOptions::new();
         #[cfg(windows)]
-        options.access_mode(
-            winapi::winnt::GENERIC_EXECUTE | winapi::winnt::GENERIC_READ
-                | winapi::winnt::GENERIC_WRITE,
-        );
+        options.access_mode(GENERIC_ALL);
 
         let file = options
             .read(true)
@@ -896,10 +898,7 @@ mod test {
 
         let mut options = OpenOptions::new();
         #[cfg(windows)]
-        options.access_mode(
-            winapi::winnt::GENERIC_EXECUTE | winapi::winnt::GENERIC_READ
-                | winapi::winnt::GENERIC_WRITE,
-        );
+        options.access_mode(GENERIC_ALL);
 
         let mut file = options
             .read(true)
@@ -945,10 +944,7 @@ mod test {
 
         let mut options = OpenOptions::new();
         #[cfg(windows)]
-        options.access_mode(
-            winapi::winnt::GENERIC_EXECUTE | winapi::winnt::GENERIC_READ
-                | winapi::winnt::GENERIC_WRITE,
-        );
+        options.access_mode(GENERIC_ALL);
 
         let mut file = options
             .read(true)
