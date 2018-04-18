@@ -46,13 +46,13 @@ impl MmapInner {
         file: &File,
         protect: DWORD,
         access: DWORD,
-        offset: usize,
+        offset: u64,
         len: usize,
         copy: bool,
     ) -> io::Result<MmapInner> {
-        let alignment = offset % allocation_granularity();
-        let aligned_offset = offset - alignment;
-        let aligned_len = len + alignment;
+        let alignment = offset % allocation_granularity() as u64;
+        let aligned_offset = offset - alignment as u64;
+        let aligned_len = len + alignment as usize;
 
         unsafe {
             let handle = CreateFileMappingW(
@@ -89,7 +89,7 @@ impl MmapInner {
         }
     }
 
-    pub fn map(len: usize, file: &File, offset: usize) -> io::Result<MmapInner> {
+    pub fn map(len: usize, file: &File, offset: u64) -> io::Result<MmapInner> {
         let write = protection_supported(file.as_raw_handle(), PAGE_READWRITE);
         let exec = protection_supported(file.as_raw_handle(), PAGE_EXECUTE_READ);
         let mut access = FILE_MAP_READ;
@@ -116,7 +116,7 @@ impl MmapInner {
         Ok(inner)
     }
 
-    pub fn map_exec(len: usize, file: &File, offset: usize) -> io::Result<MmapInner> {
+    pub fn map_exec(len: usize, file: &File, offset: u64) -> io::Result<MmapInner> {
         let write = protection_supported(file.as_raw_handle(), PAGE_READWRITE);
         let mut access = FILE_MAP_READ | FILE_MAP_EXECUTE;
         let protection = if write {
@@ -133,7 +133,7 @@ impl MmapInner {
         Ok(inner)
     }
 
-    pub fn map_mut(len: usize, file: &File, offset: usize) -> io::Result<MmapInner> {
+    pub fn map_mut(len: usize, file: &File, offset: u64) -> io::Result<MmapInner> {
         let exec = protection_supported(file.as_raw_handle(), PAGE_EXECUTE_READ);
         let mut access = FILE_MAP_READ | FILE_MAP_WRITE;
         let protection = if exec {
@@ -150,7 +150,7 @@ impl MmapInner {
         Ok(inner)
     }
 
-    pub fn map_copy(len: usize, file: &File, offset: usize) -> io::Result<MmapInner> {
+    pub fn map_copy(len: usize, file: &File, offset: u64) -> io::Result<MmapInner> {
         let exec = protection_supported(file.as_raw_handle(), PAGE_EXECUTE_READWRITE);
         let mut access = FILE_MAP_COPY;
         let protection = if exec {
