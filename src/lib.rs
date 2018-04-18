@@ -28,7 +28,7 @@ use std::ops::{Deref, DerefMut};
 /// `MmapOptions::map_exec`, or `MmapOptions::map_copy`.
 #[derive(Clone, Debug, Default)]
 pub struct MmapOptions {
-    offset: usize,
+    offset: u64,
     len: Option<usize>,
     stack: bool,
 }
@@ -86,7 +86,7 @@ impl MmapOptions {
     /// # }
     /// # fn main() { try_main().unwrap(); }
     /// ```
-    pub fn offset(&mut self, offset: usize) -> &mut Self {
+    pub fn offset(&mut self, offset: u64) -> &mut Self {
         self.offset = offset;
         self
     }
@@ -123,13 +123,14 @@ impl MmapOptions {
     fn get_len(&self, file: &File) -> Result<usize> {
         self.len.map(Ok).unwrap_or_else(|| {
             let len = file.metadata()?.len();
+            let len = len - self.offset;
             if len > (usize::MAX as u64) {
                 return Err(Error::new(
                     ErrorKind::InvalidData,
                     "file length overflows usize",
                 ));
             }
-            Ok(len as usize - self.offset)
+            Ok(len as usize)
         })
     }
 
@@ -829,12 +830,20 @@ mod test {
             .open(&path)
             .unwrap();
 
-        file.set_len(500000 as u64).unwrap();
+        let offset = u32::max_value() as u64 + 2;
+        let len = 5432;
+        file.set_len(offset + len as u64).unwrap();
 
-        let offset = 5099;
-        let len = 50050;
 
+        // Test both auto-length and explicit length
         let mut mmap = unsafe {
+            MmapOptions::new()
+                .offset(offset)
+                .map_mut(&file)
+                .unwrap()
+        };
+        assert_eq!(len, mmap.len());
+        mmap = unsafe {
             MmapOptions::new()
                 .offset(offset)
                 .len(len)
