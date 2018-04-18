@@ -28,7 +28,7 @@ use std::ops::{Deref, DerefMut};
 /// `MmapOptions::map_exec`, or `MmapOptions::map_copy`.
 #[derive(Clone, Debug, Default)]
 pub struct MmapOptions {
-    offset: usize,
+    offset: u64,
     len: Option<usize>,
     stack: bool,
 }
@@ -86,7 +86,7 @@ impl MmapOptions {
     /// # }
     /// # fn main() { try_main().unwrap(); }
     /// ```
-    pub fn offset(&mut self, offset: usize) -> &mut Self {
+    pub fn offset(&mut self, offset: u64) -> &mut Self {
         self.offset = offset;
         self
     }
@@ -123,13 +123,14 @@ impl MmapOptions {
     fn get_len(&self, file: &File) -> Result<usize> {
         self.len.map(Ok).unwrap_or_else(|| {
             let len = file.metadata()?.len();
+            let len = len - self.offset;
             if len > (usize::MAX as u64) {
                 return Err(Error::new(
                     ErrorKind::InvalidData,
                     "file length overflows usize",
                 ));
             }
-            Ok(len as usize - self.offset)
+            Ok(len as usize)
         })
     }
 
