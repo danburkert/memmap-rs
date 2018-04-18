@@ -285,9 +285,9 @@ impl MmapOptions {
 ///
 /// A `Mmap` may be backed by a file, or it can be anonymous map, backed by volatile memory.
 ///
-/// Use `MmapOptions` to configure and create a file-backed memory map. To create an immutable
-/// anonymous memory map, first create a mutable anonymous memory map using `MmapOptions`, and then
-/// make it immutable with `MmapMut::make_read_only`.
+/// Use [`MmapOptions`](struct.MmapOptions.html) to configure and create a file-backed memory
+/// map. To create an immutable anonymous memory map, first create a mutable anonymous memory map
+/// using `MmapOptions`, and then make it immutable with `MmapMut::make_read_only`.
 ///
 /// # Example
 ///
@@ -305,7 +305,7 @@ impl MmapOptions {
 /// # fn main() { try_main().unwrap(); }
 /// ```
 ///
-/// See `MmapMut` for the mutable version.
+/// See [`MmapMut`](struct.MmapMut.html) for the mutable version.
 pub struct Mmap {
     inner: MmapInner,
 }
@@ -418,9 +418,9 @@ impl fmt::Debug for Mmap {
 ///
 /// A file-backed `MmapMut` buffer may be used to read from or write to a file. An anonymous
 /// `MmapMut` buffer may be used any place that an in-memory byte buffer is needed. Use
-/// `MmapOptions` for creating memory maps.
+/// [`MmapOptions`](struct.MmapOptions.html) for creating memory maps.
 ///
-/// See `Mmap` for the immutable version.
+/// See [`Mmap`](struct.Mmap.html) for the immutable version.
 pub struct MmapMut {
     inner: MmapInner,
 }
