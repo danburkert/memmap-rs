@@ -282,13 +282,23 @@ impl MmapOptions {
     }
 }
 
-/// An immutable memory mapped buffer.
+/// A handle to an immutable memory mapped buffer.
 ///
 /// A `Mmap` may be backed by a file, or it can be anonymous map, backed by volatile memory.
 /// Use [`MmapOptions`](struct.MmapOptions.html) or [`map`](#method.map) to create a file-backed
 /// memory map. To create an immutable anonymous memory map, first create a mutable anonymous
 /// memory map using `MmapOptions`, and then make it immutable with `MmapMut::make_read_only`.
 ///
+/// A file backed `Mmap` is created by `&File` reference, and will remain valid even after the
+/// `File` is dropped. In other words, the `Mmap` handle is completely independent of the `File`
+/// used to create it. For consistency, on some platforms this is achieved by duplicating the
+/// underlying file handle. The memory will be unmapped when the `Mmap` handle is dropped.
+///
+/// Dereferencing and accessing the bytes of the buffer may result in page faults (e.g. swapping
+/// the mapped pages into physical memory) though the details of this are platform specific.
+///
+/// `Mmap` is `Sync` and `Send`. You may use `Arc<Mmap>` for a shared, reference counted
+/// handle.
 ///
 /// # Example
 ///
@@ -415,12 +425,23 @@ impl fmt::Debug for Mmap {
     }
 }
 
-/// A mutable memory mapped buffer.
+/// A handle to a mutable memory mapped buffer.
 ///
 /// A file-backed `MmapMut` buffer may be used to read from or write to a file. An anonymous
 /// `MmapMut` buffer may be used any place that an in-memory byte buffer is needed. Use
 /// [`MmapOptions`](struct.MmapOptions.html), [`map_mut`](#method.map_mut) or
 /// [`map_anon`](#method.map_anon) to create a mutable memory map.
+///
+/// A file backed `MmapMut` is created by `&File` reference, and will remain valid even after the
+/// `File` is dropped. In other words, the `MmapMut` handle is completely independent of the `File`
+/// used to create it. For consistency, on some platforms this is achieved by duplicating the
+/// underlying file handle. The memory will be unmapped when the `MmapMut` handle is dropped.
+///
+/// Dereferencing and accessing the bytes of the buffer may result in page faults (e.g. swapping
+/// the mapped pages into physical memory) though the details of this are platform specific.
+///
+/// `MmapMut` is `Sync` and `Send`. You may use `Arc<MmapMut>` for a shared, reference counted
+/// handle.
 ///
 /// See [`Mmap`](struct.Mmap.html) for the immutable version.
 pub struct MmapMut {
