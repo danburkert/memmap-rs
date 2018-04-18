@@ -23,9 +23,10 @@ use std::ops::{Deref, DerefMut};
 
 /// A memory map builder, providing advanced options and flags for specifying memory map behavior.
 ///
-/// `MmapOptions` can be used to create an anonymous memory map using `MmapOptions::map_anon`, or a
-/// file-backed memory map using one of `MmapOptions::map`, `MmapOptions::map_mut`,
-/// `MmapOptions::map_exec`, or `MmapOptions::map_copy`.
+/// `MmapOptions` can be used to create an anonymous memory map using
+/// [`map_anon`](#method.map_anon),
+/// or a file-backed memory map using one of [`map`](#method.map), [`map_mut`](#method.map_mut),
+/// [`map_exec`](#method.map_exec), or [`map_copy`](#method.map_copy).
 #[derive(Clone, Debug, Default)]
 pub struct MmapOptions {
     offset: usize,
