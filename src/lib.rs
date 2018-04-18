@@ -830,12 +830,20 @@ mod test {
             .open(&path)
             .unwrap();
 
-        file.set_len(500000 as u64).unwrap();
+        let offset = u32::max_value() as u64 + 2;
+        let len = 5432;
+        file.set_len(offset + len as u64).unwrap();
 
-        let offset = 5099;
-        let len = 50050;
 
+        // Test both auto-length and explicit length
         let mut mmap = unsafe {
+            MmapOptions::new()
+                .offset(offset)
+                .map_mut(&file)
+                .unwrap()
+        };
+        assert_eq!(len, mmap.len());
+        mmap = unsafe {
             MmapOptions::new()
                 .offset(offset)
                 .len(len)
