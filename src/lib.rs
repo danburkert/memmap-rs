@@ -297,8 +297,8 @@ impl MmapOptions {
 /// Dereferencing and accessing the bytes of the buffer may result in page faults (e.g. swapping
 /// the mapped pages into physical memory) though the details of this are platform specific.
 ///
-/// `Mmap` is `Sync` and `Send`. You may use `Arc<Mmap>` for a shared, reference counted
-/// handle.
+/// `Mmap` is `Sync` and `Send`. For a shared, reference counted handle, you may use `Rc<Mmap>`, or
+/// to preserve `Sync` and `Send`, use `Arc<Mmap>`.
 ///
 /// # Example
 ///
@@ -440,8 +440,8 @@ impl fmt::Debug for Mmap {
 /// Dereferencing and accessing the bytes of the buffer may result in page faults (e.g. swapping
 /// the mapped pages into physical memory) though the details of this are platform specific.
 ///
-/// `MmapMut` is `Sync` and `Send`. You may use `Arc<MmapMut>` for a shared, reference counted
-/// handle.
+/// `MmapMut` is `Sync` and `Send`. For a shared handle supporting mutable access, consider using
+/// `Mutex<MmapMut>` or `RwLock<MmapMut>`.
 ///
 /// See [`Mmap`](struct.Mmap.html) for the immutable version.
 pub struct MmapMut {
