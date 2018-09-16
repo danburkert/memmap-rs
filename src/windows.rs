@@ -1,34 +1,19 @@
-use std::{io, mem, ptr};
 use std::fs::File;
 use std::os::raw::c_void;
 use std::os::windows::io::{AsRawHandle, RawHandle};
+use std::{io, mem, ptr};
 
 use winapi::shared::basetsd::SIZE_T;
 use winapi::shared::minwindef::DWORD;
+use winapi::um::handleapi::{CloseHandle, INVALID_HANDLE_VALUE};
 use winapi::um::memoryapi::{
-    FILE_MAP_ALL_ACCESS,
-    FILE_MAP_COPY,
-    FILE_MAP_EXECUTE,
-    FILE_MAP_READ,
-    FILE_MAP_WRITE,
-    CreateFileMappingW,
-    VirtualProtect,
-    MapViewOfFile,
-    UnmapViewOfFile,
-    FlushViewOfFile,
-};
-use winapi::um::handleapi::{
-    CloseHandle,
-    INVALID_HANDLE_VALUE,
+    CreateFileMappingW, FlushViewOfFile, MapViewOfFile, UnmapViewOfFile, VirtualProtect,
+    FILE_MAP_ALL_ACCESS, FILE_MAP_COPY, FILE_MAP_EXECUTE, FILE_MAP_READ, FILE_MAP_WRITE,
 };
 use winapi::um::sysinfoapi::GetSystemInfo;
 use winapi::um::winnt::{
-    PAGE_EXECUTE_READ,
-    PAGE_EXECUTE_READWRITE,
-    PAGE_EXECUTE_WRITECOPY,
-    PAGE_READONLY,
-    PAGE_READWRITE,
-    PAGE_WRITECOPY,
+    PAGE_EXECUTE_READ, PAGE_EXECUTE_READWRITE, PAGE_EXECUTE_WRITECOPY, PAGE_READONLY,
+    PAGE_READWRITE, PAGE_WRITECOPY,
 };
 
 pub struct MmapInner {
@@ -194,12 +179,7 @@ impl MmapInner {
             }
 
             let mut old = 0;
-            let result = VirtualProtect(
-                ptr,
-                len as SIZE_T,
-                PAGE_READWRITE,
-                &mut old,
-            );
+            let result = VirtualProtect(ptr, len as SIZE_T, PAGE_READWRITE, &mut old);
             if result != 0 {
                 Ok(MmapInner {
                     file: None,
@@ -288,9 +268,11 @@ impl Drop for MmapInner {
         let alignment = self.ptr as usize % allocation_granularity();
         unsafe {
             let ptr = self.ptr.offset(-(alignment as isize));
-            assert!(UnmapViewOfFile(ptr) != 0,
-                    "unable to unmap mmap: {}",
-                    io::Error::last_os_error());
+            assert!(
+                UnmapViewOfFile(ptr) != 0,
+                "unable to unmap mmap: {}",
+                io::Error::last_os_error()
+            );
         }
     }
 }

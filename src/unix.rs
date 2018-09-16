@@ -1,15 +1,21 @@
 extern crate libc;
 
-use std::{io, ptr};
 use std::fs::File;
 use std::os::unix::io::{AsRawFd, RawFd};
+use std::{io, ptr};
 
-#[cfg(any(all(target_os = "linux", not(target_arch = "mips")), target_os = "freebsd",
-          target_os = "android"))]
+#[cfg(any(
+    all(target_os = "linux", not(target_arch = "mips")),
+    target_os = "freebsd",
+    target_os = "android"
+))]
 const MAP_STACK: libc::c_int = libc::MAP_STACK;
 
-#[cfg(not(any(all(target_os = "linux", not(target_arch = "mips")), target_os = "freebsd",
-              target_os = "android")))]
+#[cfg(not(any(
+    all(target_os = "linux", not(target_arch = "mips")),
+    target_os = "freebsd",
+    target_os = "android"
+)))]
 const MAP_STACK: libc::c_int = 0;
 
 pub struct MmapInner {

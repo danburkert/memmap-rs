@@ -17,9 +17,9 @@ use unix::MmapInner;
 use std::fmt;
 use std::fs::File;
 use std::io::{Error, ErrorKind, Result};
+use std::ops::{Deref, DerefMut};
 use std::slice;
 use std::usize;
-use std::ops::{Deref, DerefMut};
 
 /// A memory map builder, providing advanced options and flags for specifying memory map behavior.
 ///
@@ -648,9 +648,9 @@ mod test {
     extern crate winapi;
 
     use std::fs::OpenOptions;
+    use std::io::{Read, Write};
     #[cfg(windows)]
     use std::os::windows::fs::OpenOptionsExt;
-    use std::io::{Read, Write};
     use std::sync::Arc;
     use std::thread;
 
