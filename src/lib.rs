@@ -1005,4 +1005,27 @@ mod test {
         let mmap = mmap.make_exec().expect("make_exec");
         drop(mmap);
     }
+
+    #[test]
+    fn issue69() {
+        let tempdir = tempdir::TempDir::new("mmap").unwrap();
+        let path = tempdir.path().join("mmap");
+
+        // Create a 3GiB (sparse) file.
+        let file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .open(&path)
+            .unwrap();
+        let len = 3 * 1024 * 1024 * 1024;
+        file.set_len(len).unwrap();
+
+        // Map the file.
+        let mmap = unsafe { MmapOptions::new().map_mut(&file).unwrap() };
+
+        // All bytes should be 0, and the slice length should match.
+        assert_eq!(mmap[..].len() as u64, len);
+        assert!(mmap[..].iter().all(|&byte| byte == 0));
+    }
 }
