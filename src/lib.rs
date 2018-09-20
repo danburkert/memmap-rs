@@ -119,14 +119,14 @@ impl MmapOptions {
     /// Returns the configured length, or the length of the provided file.
     fn get_len(&self, file: &File) -> Result<usize> {
         self.len.map(Ok).unwrap_or_else(|| {
-            let len = file.metadata()?.len();
+            let len = file.metadata()?.len() - self.offset;
             if len > (usize::MAX as u64) {
                 return Err(Error::new(
                     ErrorKind::InvalidData,
-                    "file length overflows usize",
+                    "memory map length overflows usize",
                 ));
             }
-            Ok((len - self.offset) as usize)
+            Ok(len as usize)
         })
     }
 
@@ -820,14 +820,11 @@ mod test {
         let len = 5432;
         file.set_len(offset + len as u64).unwrap();
 
-        // Check auto-length mmap. The file length exceeds 4GiB, so this fails on 32-bit platforms.
-        #[cfg(target_pointer_width = "64")]
-        {
-            let mmap = unsafe { MmapOptions::new().offset(offset).map_mut(&file).unwrap() };
-            assert_eq!(len, mmap.len());
-        }
+        // Check inferred length mmap.
+        let mmap = unsafe { MmapOptions::new().offset(offset).map_mut(&file).unwrap() };
+        assert_eq!(len, mmap.len());
 
-        // Check explicit length mmap. This should succeed on any platform.
+        // Check explicit length mmap.
         let mut mmap = unsafe {
             MmapOptions::new()
                 .offset(offset)
