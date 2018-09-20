@@ -44,6 +44,13 @@ impl MmapInner {
                 "memory map must have a non-zero length",
             ));
         }
+        let max_offset: libc::off_t = !0;
+        if offset > max_offset as u64 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "offset overflows libc::off_t",
+            ));
+        }
 
         unsafe {
             let ptr = libc::mmap(
