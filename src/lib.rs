@@ -1,6 +1,6 @@
 //! A cross-platform Rust API for memory mapped buffers.
 
-#![doc(html_root_url = "https://docs.rs/memmap/0.6.2")]
+#![doc(html_root_url = "https://docs.rs/memmap/0.7.0")]
 
 #[cfg(windows)]
 extern crate winapi;
