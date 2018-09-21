@@ -27,6 +27,14 @@ use std::usize;
 /// [`map_anon`](#method.map_anon),
 /// or a file-backed memory map using one of [`map`](#method.map), [`map_mut`](#method.map_mut),
 /// [`map_exec`](#method.map_exec), or [`map_copy`](#method.map_copy).
+///
+/// ## Safety
+///
+/// All file-backed memory map constructors are marked `unsafe` because of the potential for
+/// *Undefined Behavior* (UB) using the map if the underlying file is subsequently modified, in or
+/// out of process.  Applications must consider the risk and take appropriate precautions when
+/// using file-backed maps. Solutions such as file permissions, locks or process-private
+/// (e.g. unlinked) files exist but are platform specific and limited.
 #[derive(Clone, Debug, Default)]
 pub struct MmapOptions {
     offset: u64,
@@ -293,7 +301,15 @@ impl MmapOptions {
 /// `Mmap` is `Sync` and `Send`. For a shared, reference counted handle, you may use `Rc<Mmap>`, or
 /// to preserve `Sync` and `Send`, use `Arc<Mmap>`.
 ///
-/// # Example
+/// ## Safety
+///
+/// All file-backed memory map constructors are marked `unsafe` because of the potential for
+/// *Undefined Behavior* (UB) using the map if the underlying file is subsequently modified, in or
+/// out of process.  Applications must consider the risk and take appropriate precautions when
+/// using file-backed maps. Solutions such as file permissions, locks or process-private
+/// (e.g. unlinked) files exist but are platform specific and limited.
+///
+/// ## Example
 ///
 /// ```
 /// use memmap::MmapOptions;
@@ -434,6 +450,14 @@ impl fmt::Debug for Mmap {
 /// `Mutex<MmapMut>` or `RwLock<MmapMut>`.
 ///
 /// See [`Mmap`](struct.Mmap.html) for the immutable version.
+///
+/// ## Safety
+///
+/// All file-backed memory map constructors are marked `unsafe` because of the potential for
+/// *Undefined Behavior* (UB) using the map if the underlying file is subsequently modified, in or
+/// out of process.  Applications must consider the risk and take appropriate precautions when
+/// using file-backed maps. Solutions such as file permissions, locks or process-private
+/// (e.g. unlinked) files exist but are platform specific and limited.
 pub struct MmapMut {
     inner: MmapInner,
 }
