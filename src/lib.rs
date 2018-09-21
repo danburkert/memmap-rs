@@ -23,9 +23,18 @@ use std::usize;
 
 /// A memory map builder, providing advanced options and flags for specifying memory map behavior.
 ///
-/// `MmapOptions` can be used to create an anonymous memory map using `MmapOptions::map_anon`, or a
-/// file-backed memory map using one of `MmapOptions::map`, `MmapOptions::map_mut`,
-/// `MmapOptions::map_exec`, or `MmapOptions::map_copy`.
+/// `MmapOptions` can be used to create an anonymous memory map using
+/// [`map_anon`](#method.map_anon),
+/// or a file-backed memory map using one of [`map`](#method.map), [`map_mut`](#method.map_mut),
+/// [`map_exec`](#method.map_exec), or [`map_copy`](#method.map_copy).
+///
+/// ## Safety
+///
+/// All file-backed memory map constructors are marked `unsafe` because of the potential for
+/// *Undefined Behavior* (UB) using the map if the underlying file is subsequently modified, in or
+/// out of process.  Applications must consider the risk and take appropriate precautions when
+/// using file-backed maps. Solutions such as file permissions, locks or process-private
+/// (e.g. unlinked) files exist but are platform specific and limited.
 #[derive(Clone, Debug, Default)]
 pub struct MmapOptions {
     offset: u64,
@@ -274,15 +283,33 @@ impl MmapOptions {
     }
 }
 
-/// An immutable memory mapped buffer.
+/// A handle to an immutable memory mapped buffer.
 ///
 /// A `Mmap` may be backed by a file, or it can be anonymous map, backed by volatile memory.
+/// Use [`MmapOptions`](struct.MmapOptions.html) or [`map`](#method.map) to create a file-backed
+/// memory map. To create an immutable anonymous memory map, first create a mutable anonymous
+/// memory map using `MmapOptions`, and then make it immutable with `MmapMut::make_read_only`.
 ///
-/// Use `MmapOptions` to configure and create a file-backed memory map. To create an immutable
-/// anonymous memory map, first create a mutable anonymous memory map using `MmapOptions`, and then
-/// make it immutable with `MmapMut::make_read_only`.
+/// A file backed `Mmap` is created by `&File` reference, and will remain valid even after the
+/// `File` is dropped. In other words, the `Mmap` handle is completely independent of the `File`
+/// used to create it. For consistency, on some platforms this is achieved by duplicating the
+/// underlying file handle. The memory will be unmapped when the `Mmap` handle is dropped.
 ///
-/// # Example
+/// Dereferencing and accessing the bytes of the buffer may result in page faults (e.g. swapping
+/// the mapped pages into physical memory) though the details of this are platform specific.
+///
+/// `Mmap` is `Sync` and `Send`. For a shared, reference counted handle, you may use `Rc<Mmap>`, or
+/// to preserve `Sync` and `Send`, use `Arc<Mmap>`.
+///
+/// ## Safety
+///
+/// All file-backed memory map constructors are marked `unsafe` because of the potential for
+/// *Undefined Behavior* (UB) using the map if the underlying file is subsequently modified, in or
+/// out of process.  Applications must consider the risk and take appropriate precautions when
+/// using file-backed maps. Solutions such as file permissions, locks or process-private
+/// (e.g. unlinked) files exist but are platform specific and limited.
+///
+/// ## Example
 ///
 /// ```
 /// use memmap::MmapOptions;
@@ -297,7 +324,7 @@ impl MmapOptions {
 /// # }
 /// ```
 ///
-/// See `MmapMut` for the mutable version.
+/// See [`MmapMut`](struct.MmapMut.html) for the mutable version.
 pub struct Mmap {
     inner: MmapInner,
 }
@@ -404,13 +431,33 @@ impl fmt::Debug for Mmap {
     }
 }
 
-/// A mutable memory mapped buffer.
+/// A handle to a mutable memory mapped buffer.
 ///
 /// A file-backed `MmapMut` buffer may be used to read from or write to a file. An anonymous
 /// `MmapMut` buffer may be used any place that an in-memory byte buffer is needed. Use
-/// `MmapOptions` for creating memory maps.
+/// [`MmapOptions`](struct.MmapOptions.html), [`map_mut`](#method.map_mut) or
+/// [`map_anon`](#method.map_anon) to create a mutable memory map.
 ///
-/// See `Mmap` for the immutable version.
+/// A file backed `MmapMut` is created by `&File` reference, and will remain valid even after the
+/// `File` is dropped. In other words, the `MmapMut` handle is completely independent of the `File`
+/// used to create it. For consistency, on some platforms this is achieved by duplicating the
+/// underlying file handle. The memory will be unmapped when the `MmapMut` handle is dropped.
+///
+/// Dereferencing and accessing the bytes of the buffer may result in page faults (e.g. swapping
+/// the mapped pages into physical memory) though the details of this are platform specific.
+///
+/// `MmapMut` is `Sync` and `Send`. For a shared handle supporting mutable access, consider using
+/// `Mutex<MmapMut>` or `RwLock<MmapMut>`.
+///
+/// See [`Mmap`](struct.Mmap.html) for the immutable version.
+///
+/// ## Safety
+///
+/// All file-backed memory map constructors are marked `unsafe` because of the potential for
+/// *Undefined Behavior* (UB) using the map if the underlying file is subsequently modified, in or
+/// out of process.  Applications must consider the risk and take appropriate precautions when
+/// using file-backed maps. Solutions such as file permissions, locks or process-private
+/// (e.g. unlinked) files exist but are platform specific and limited.
 pub struct MmapMut {
     inner: MmapInner,
 }
