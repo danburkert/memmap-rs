@@ -17,9 +17,9 @@ use unix::MmapInner;
 use std::fmt;
 use std::fs::File;
 use std::io::{Error, ErrorKind, Result};
+use std::isize;
 use std::ops::{Deref, DerefMut};
 use std::slice;
-use std::usize;
 
 /// A memory map builder, providing advanced options and flags for specifying memory map behavior.
 ///
@@ -131,16 +131,23 @@ impl MmapOptions {
 
     /// Returns the configured length, or the length of the provided file.
     fn get_len(&self, file: &File) -> Result<usize> {
-        self.len.map(Ok).unwrap_or_else(|| {
-            let len = file.metadata()?.len() - self.offset;
-            if len > (usize::MAX as u64) {
-                return Err(Error::new(
-                    ErrorKind::InvalidData,
-                    "memory map length overflows usize",
-                ));
-            }
-            Ok(len as usize)
-        })
+        let len: u64 = if let Some(len_usize) = self.len {
+            len_usize as u64
+        } else {
+            // If this is zero, it will lead to an error later.
+            file.metadata()?.len().saturating_sub(self.offset)
+        };
+        // Safety note: Constructing a slice longer than isize::MAX leads to undefined behavior,
+        // because of the limitations of ptr::offset(). See:
+        // - https://doc.rust-lang.org/std/primitive.pointer.html?search=#method.offset
+        // - https://github.com/rust-lang/rust/blob/1.29.0/src/liballoc/raw_vec.rs#L735-L742
+        if len > isize::MAX as u64 {
+            return Err(Error::new(
+                ErrorKind::InvalidInput,
+                "memory map length overflows isize",
+            ));
+        }
+        Ok(len as usize)
     }
 
     /// Configures the anonymous memory map to be suitable for a process or thread stack.
@@ -687,7 +694,9 @@ mod test {
     extern crate winapi;
 
     use std::fs::OpenOptions;
+    use std::io::ErrorKind;
     use std::io::{Read, Write};
+    use std::isize;
     #[cfg(windows)]
     use std::os::windows::fs::OpenOptionsExt;
     use std::sync::Arc;
@@ -1056,5 +1065,39 @@ mod test {
         let mmap = mmap.make_mut().expect("make_mut");
         let mmap = mmap.make_exec().expect("make_exec");
         drop(mmap);
+    }
+
+    #[test]
+    fn isize_max() {
+        let tempdir = tempdir::TempDir::new("mmap").unwrap();
+        let path = tempdir.path().join("mmap");
+
+        let len = 128;
+        let file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .open(&path)
+            .unwrap();
+        file.set_len(len).unwrap();
+
+        // Mapping the file should succeed.
+        unsafe { MmapOptions::new().map_mut(&file).unwrap() };
+
+        // Mapping the file with excess length should succeed.
+        unsafe { MmapOptions::new().len(1_000_000).map_mut(&file).unwrap() };
+
+        // Mapping the file with a length equal to isize::MAX will almost certainly fail on 64-bit
+        // systems, but it might succeed on 32-bit. Either way, it shouldn't fail with an
+        // InvalidInput error.
+        let res = unsafe { MmapOptions::new().len(isize::MAX as usize).map_mut(&file) };
+        if let Err(err) = res {
+            assert!(ErrorKind::InvalidInput != err.kind());
+        }
+
+        // But mapping the file with a length larger than isize::MAX must fail with InvalidInput,
+        // becuase it's UB to create a slice that large.
+        let err = unsafe { MmapOptions::new().len(isize::MAX as usize + 1).map_mut(&file).unwrap_err() };
+        assert_eq!(ErrorKind::InvalidInput, err.kind());
     }
 }
