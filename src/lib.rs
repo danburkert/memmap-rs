@@ -130,7 +130,7 @@ impl MmapOptions {
         // - https://github.com/rust-lang/rust/blob/1.29.0/src/liballoc/raw_vec.rs#L735-L742
         if len > isize::MAX as u64 {
             return Err(Error::new(
-                ErrorKind::InvalidData,
+                ErrorKind::InvalidInput,
                 "memory map length overflows isize",
             ));
         }
@@ -642,7 +642,9 @@ mod test {
     extern crate winapi;
 
     use std::fs::OpenOptions;
+    use std::io::ErrorKind;
     use std::io::{Read, Write};
+    use std::isize;
     #[cfg(windows)]
     use std::os::windows::fs::OpenOptionsExt;
     use std::sync::Arc;
@@ -1011,5 +1013,39 @@ mod test {
         let mmap = mmap.make_mut().expect("make_mut");
         let mmap = mmap.make_exec().expect("make_exec");
         drop(mmap);
+    }
+
+    #[test]
+    fn isize_max() {
+        let tempdir = tempdir::TempDir::new("mmap").unwrap();
+        let path = tempdir.path().join("mmap");
+
+        let len = 128;
+        let file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .open(&path)
+            .unwrap();
+        file.set_len(len).unwrap();
+
+        // Mapping the file should succeed.
+        unsafe { MmapOptions::new().map_mut(&file).unwrap() };
+
+        // Mapping the file with excess length should succeed.
+        unsafe { MmapOptions::new().len(1_000_000).map_mut(&file).unwrap() };
+
+        // Mapping the file with a length equal to isize::MAX will almost certainly fail on 64-bit
+        // systems, but it might succeed on 32-bit. Either way, it shouldn't fail with an
+        // InvalidInput error.
+        let res = unsafe { MmapOptions::new().len(isize::MAX as usize).map_mut(&file) };
+        if let Err(err) = res {
+            assert!(ErrorKind::InvalidInput != err.kind());
+        }
+
+        // But mapping the file with a length larger than isize::MAX must fail with InvalidInput,
+        // becuase it's UB to create a slice that large.
+        let err = unsafe { MmapOptions::new().len(isize::MAX as usize + 1).map_mut(&file).unwrap_err() };
+        assert_eq!(ErrorKind::InvalidInput, err.kind());
     }
 }
