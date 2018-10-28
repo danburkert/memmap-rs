@@ -8,6 +8,7 @@ repository = "https://github.com/danburkert/memmap-rs"
 documentation = "https://docs.rs/memmap"
 description = "Cross-platform Rust API for memory-mapped file IO"
 keywords = ["mmap", "memory-map", "io", "file"]
+exclude = ["/ci/*", "/.appveyor.yml", "/.travis.yml"]
 
 [badges]
 travis-ci = { repository = "danburkert/memmap-rs" }
