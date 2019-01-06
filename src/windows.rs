@@ -260,6 +260,24 @@ impl MmapInner {
         Ok(inner)
     }
 
+    pub fn map_copy_read_only(len: usize, file: &File, offset: u64) -> io::Result<MmapInner> {
+        let write = protection_supported(file.as_raw_handle(), PAGE_READWRITE);
+        let exec = protection_supported(file.as_raw_handle(), PAGE_EXECUTE_READ);
+        let mut access = FILE_MAP_COPY;
+        let protection = if exec {
+            access |= FILE_MAP_EXECUTE;
+            PAGE_EXECUTE_WRITECOPY
+        } else {
+            PAGE_WRITECOPY
+        };
+
+        let mut inner = MmapInner::new(file, protection, access, offset, len, true)?;
+        if write || exec {
+            inner.make_read_only()?;
+        }
+        Ok(inner)
+    }
+
     pub fn map_anon(len: usize, _stack: bool) -> io::Result<MmapInner> {
         unsafe {
             // Create a mapping and view with maximum access permissions, then use `VirtualProtect`

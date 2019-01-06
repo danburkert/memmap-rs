@@ -106,6 +106,16 @@ impl MmapInner {
         )
     }
 
+    pub fn map_copy_read_only(len: usize, file: &File, offset: u64) -> io::Result<MmapInner> {
+        MmapInner::new(
+            len,
+            libc::PROT_READ,
+            libc::MAP_PRIVATE,
+            file.as_raw_fd(),
+            offset,
+        )
+    }
+
     /// Open an anonymous memory map.
     pub fn map_anon(len: usize, stack: bool) -> io::Result<MmapInner> {
         let stack = if stack { MAP_STACK } else { 0 };

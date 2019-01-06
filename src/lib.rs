@@ -22,8 +22,8 @@ use std::usize;
 /// A memory map builder, providing advanced options and flags for specifying memory map behavior.
 ///
 /// `MmapOptions` can be used to create an anonymous memory map using [`map_anon()`], or a
-/// file-backed memory map using one of [`map()`], [`map_mut()`], [`map_exec()`], or
-/// [`map_copy()`].
+/// file-backed memory map using one of [`map()`], [`map_mut()`], [`map_exec()`],
+/// [`map_copy()`], or [`map_copy_read_only()`].
 ///
 /// ## Safety
 ///
@@ -38,6 +38,7 @@ use std::usize;
 /// [`map_mut()`]: MmapOptions::map_mut()
 /// [`map_exec()`]: MmapOptions::map_exec()
 /// [`map_copy()`]: MmapOptions::map_copy()
+/// [`map_copy_read_only()`]: MmapOptions::map_copy_read_only()
 #[derive(Clone, Debug, Default)]
 pub struct MmapOptions {
     offset: u64,
@@ -270,6 +271,39 @@ impl MmapOptions {
     pub unsafe fn map_copy(&self, file: &File) -> Result<MmapMut> {
         MmapInner::map_copy(self.get_len(file)?, file, self.offset)
             .map(|inner| MmapMut { inner: inner })
+    }
+
+    /// Creates a copy-on-write read-only memory map backed by a file.
+    ///
+    /// # Errors
+    ///
+    /// This method returns an error when the underlying system call fails, which can happen for a
+    /// variety of reasons, such as when the file is not open with read permissions.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use memmap2::MmapOptions;
+    /// use std::fs::File;
+    /// use std::io::Read;
+    ///
+    /// # fn main() -> std::io::Result<()> {
+    /// let mut file = File::open("README.md")?;
+    ///
+    /// let mut contents = Vec::new();
+    /// file.read_to_end(&mut contents)?;
+    ///
+    /// let mmap = unsafe {
+    ///     MmapOptions::new().map_copy_read_only(&file)?
+    /// };
+    ///
+    /// assert_eq!(&contents[..], &mmap[..]);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub unsafe fn map_copy_read_only(&self, file: &File) -> Result<Mmap> {
+        MmapInner::map_copy_read_only(self.get_len(file)?, file, self.offset)
+            .map(|inner| Mmap { inner: inner })
     }
 
     /// Creates an anonymous memory map.
@@ -846,6 +880,31 @@ mod test {
         assert_eq!(nulls, &read);
 
         // another mmap does not contain the write
+        let mmap2 = unsafe { MmapOptions::new().map(&file).unwrap() };
+        (&mmap2[..]).read(&mut read).unwrap();
+        assert_eq!(nulls, &read);
+    }
+
+    #[test]
+    fn map_copy_read_only() {
+        let tempdir = tempdir::TempDir::new("mmap").unwrap();
+        let path = tempdir.path().join("mmap");
+
+        let file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .open(&path)
+            .unwrap();
+        file.set_len(128).unwrap();
+
+        let nulls = b"\0\0\0\0\0\0";
+        let mut read = [0u8; 6];
+
+        let mmap = unsafe { MmapOptions::new().map_copy_read_only(&file).unwrap() };
+        (&mmap[..]).read(&mut read).unwrap();
+        assert_eq!(nulls, &read);
+
         let mmap2 = unsafe { MmapOptions::new().map(&file).unwrap() };
         (&mmap2[..]).read(&mut read).unwrap();
         assert_eq!(nulls, &read);
