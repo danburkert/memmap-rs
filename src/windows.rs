@@ -7,7 +7,7 @@ use winapi::shared::basetsd::SIZE_T;
 use winapi::shared::minwindef::DWORD;
 use winapi::um::handleapi::{CloseHandle, INVALID_HANDLE_VALUE};
 use winapi::um::memoryapi::{
-    CreateFileMappingW, FlushViewOfFile, MapViewOfFile, UnmapViewOfFile, VirtualProtect,
+    CreateFileMappingW, FlushViewOfFile, MapViewOfFileEx, UnmapViewOfFile, VirtualProtect,
     FILE_MAP_ALL_ACCESS, FILE_MAP_COPY, FILE_MAP_EXECUTE, FILE_MAP_READ, FILE_MAP_WRITE,
 };
 use winapi::um::sysinfoapi::GetSystemInfo;
@@ -26,8 +26,9 @@ pub struct MmapInner {
 impl MmapInner {
     /// Creates a new `MmapInner`.
     ///
-    /// This is a thin wrapper around the `CreateFileMappingW` and `MapViewOfFile` system calls.
+    /// This is a thin wrapper around the `CreateFileMappingW` and `MapViewOfFileEx` system calls.
     pub fn new(
+        address: *mut u8,
         file: &File,
         protect: DWORD,
         access: DWORD,
@@ -52,12 +53,13 @@ impl MmapInner {
                 return Err(io::Error::last_os_error());
             }
 
-            let ptr = MapViewOfFile(
+            let ptr = MapViewOfFileEx(
                 handle,
                 access,
                 (aligned_offset >> 16 >> 16) as DWORD,
                 (aligned_offset & 0xffffffff) as DWORD,
                 aligned_len as SIZE_T,
+                address as *mut c_void,
             );
             CloseHandle(handle);
 
@@ -74,7 +76,7 @@ impl MmapInner {
         }
     }
 
-    pub fn map(len: usize, file: &File, offset: u64) -> io::Result<MmapInner> {
+    pub fn map(address: *mut u8, len: usize, file: &File, offset: u64) -> io::Result<MmapInner> {
         let write = protection_supported(file.as_raw_handle(), PAGE_READWRITE);
         let exec = protection_supported(file.as_raw_handle(), PAGE_EXECUTE_READ);
         let mut access = FILE_MAP_READ;
@@ -94,14 +96,14 @@ impl MmapInner {
             (false, false) => PAGE_READONLY,
         };
 
-        let mut inner = MmapInner::new(file, protection, access, offset, len, false)?;
+        let mut inner = MmapInner::new(address, file, protection, access, offset, len, false)?;
         if write || exec {
             inner.make_read_only()?;
         }
         Ok(inner)
     }
 
-    pub fn map_exec(len: usize, file: &File, offset: u64) -> io::Result<MmapInner> {
+    pub fn map_exec(address: *mut u8, len: usize, file: &File, offset: u64) -> io::Result<MmapInner> {
         let write = protection_supported(file.as_raw_handle(), PAGE_READWRITE);
         let mut access = FILE_MAP_READ | FILE_MAP_EXECUTE;
         let protection = if write {
@@ -111,14 +113,14 @@ impl MmapInner {
             PAGE_EXECUTE_READ
         };
 
-        let mut inner = MmapInner::new(file, protection, access, offset, len, false)?;
+        let mut inner = MmapInner::new(address, file, protection, access, offset, len, false)?;
         if write {
             inner.make_exec()?;
         }
         Ok(inner)
     }
 
-    pub fn map_mut(len: usize, file: &File, offset: u64) -> io::Result<MmapInner> {
+    pub fn map_mut(address: *mut u8, len: usize, file: &File, offset: u64) -> io::Result<MmapInner> {
         let exec = protection_supported(file.as_raw_handle(), PAGE_EXECUTE_READ);
         let mut access = FILE_MAP_READ | FILE_MAP_WRITE;
         let protection = if exec {
@@ -128,14 +130,14 @@ impl MmapInner {
             PAGE_READWRITE
         };
 
-        let mut inner = MmapInner::new(file, protection, access, offset, len, false)?;
+        let mut inner = MmapInner::new(address, file, protection, access, offset, len, false)?;
         if exec {
             inner.make_mut()?;
         }
         Ok(inner)
     }
 
-    pub fn map_copy(len: usize, file: &File, offset: u64) -> io::Result<MmapInner> {
+    pub fn map_copy(address: *mut u8, len: usize, file: &File, offset: u64) -> io::Result<MmapInner> {
         let exec = protection_supported(file.as_raw_handle(), PAGE_EXECUTE_READWRITE);
         let mut access = FILE_MAP_COPY;
         let protection = if exec {
@@ -145,14 +147,14 @@ impl MmapInner {
             PAGE_WRITECOPY
         };
 
-        let mut inner = MmapInner::new(file, protection, access, offset, len, true)?;
+        let mut inner = MmapInner::new(address, file, protection, access, offset, len, true)?;
         if exec {
             inner.make_mut()?;
         }
         Ok(inner)
     }
 
-    pub fn map_anon(len: usize, _stack: bool) -> io::Result<MmapInner> {
+    pub fn map_anon(address: *mut u8, len: usize, _stack: bool) -> io::Result<MmapInner> {
         unsafe {
             // Create a mapping and view with maximum access permissions, then use `VirtualProtect`
             // to set the actual `Protection`. This way, we can set more permissive protection later
@@ -171,7 +173,7 @@ impl MmapInner {
                 return Err(io::Error::last_os_error());
             }
             let access = FILE_MAP_ALL_ACCESS | FILE_MAP_EXECUTE;
-            let ptr = MapViewOfFile(handle, access, 0, 0, len as SIZE_T);
+            let ptr = MapViewOfFileEx(handle, access, 0, 0, len as SIZE_T, address as *mut c_void);
             CloseHandle(handle);
 
             if ptr == ptr::null_mut() {
