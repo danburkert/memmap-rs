@@ -2,7 +2,7 @@ extern crate libc;
 
 use std::fs::File;
 use std::os::unix::io::{AsRawFd, RawFd};
-use std::{io, ptr};
+use std::{io};
 
 #[cfg(any(
     all(target_os = "linux", not(target_arch = "mips")),
@@ -28,6 +28,7 @@ impl MmapInner {
     ///
     /// This is a thin wrapper around the `mmap` sytem call.
     fn new(
+        address: *mut u8,
         len: usize,
         prot: libc::c_int,
         flags: libc::c_int,
@@ -47,7 +48,7 @@ impl MmapInner {
 
         unsafe {
             let ptr = libc::mmap(
-                ptr::null_mut(),
+                address as *mut libc::c_void,
                 aligned_len as libc::size_t,
                 prot,
                 flags,
@@ -66,8 +67,9 @@ impl MmapInner {
         }
     }
 
-    pub fn map(len: usize, file: &File, offset: u64) -> io::Result<MmapInner> {
+    pub fn map(address: *mut u8, len: usize, file: &File, offset: u64) -> io::Result<MmapInner> {
         MmapInner::new(
+            address,
             len,
             libc::PROT_READ,
             libc::MAP_SHARED,
@@ -76,8 +78,9 @@ impl MmapInner {
         )
     }
 
-    pub fn map_exec(len: usize, file: &File, offset: u64) -> io::Result<MmapInner> {
+    pub fn map_exec(address: *mut u8, len: usize, file: &File, offset: u64) -> io::Result<MmapInner> {
         MmapInner::new(
+            address,
             len,
             libc::PROT_READ | libc::PROT_EXEC,
             libc::MAP_SHARED,
@@ -86,8 +89,9 @@ impl MmapInner {
         )
     }
 
-    pub fn map_mut(len: usize, file: &File, offset: u64) -> io::Result<MmapInner> {
+    pub fn map_mut(address: *mut u8, len: usize, file: &File, offset: u64) -> io::Result<MmapInner> {
         MmapInner::new(
+            address,
             len,
             libc::PROT_READ | libc::PROT_WRITE,
             libc::MAP_SHARED,
@@ -96,8 +100,9 @@ impl MmapInner {
         )
     }
 
-    pub fn map_copy(len: usize, file: &File, offset: u64) -> io::Result<MmapInner> {
+    pub fn map_copy(address: *mut u8, len: usize, file: &File, offset: u64) -> io::Result<MmapInner> {
         MmapInner::new(
+            address,
             len,
             libc::PROT_READ | libc::PROT_WRITE,
             libc::MAP_PRIVATE,
@@ -107,9 +112,10 @@ impl MmapInner {
     }
 
     /// Open an anonymous memory map.
-    pub fn map_anon(len: usize, stack: bool) -> io::Result<MmapInner> {
+    pub fn map_anon(address: *mut u8, len: usize, stack: bool) -> io::Result<MmapInner> {
         let stack = if stack { MAP_STACK } else { 0 };
         MmapInner::new(
+            address,
             len,
             libc::PROT_READ | libc::PROT_WRITE,
             libc::MAP_SHARED | libc::MAP_ANON | stack,
