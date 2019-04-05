@@ -18,6 +18,7 @@ use std::fmt;
 use std::fs::File;
 use std::io::{Error, ErrorKind, Result};
 use std::ops::{Deref, DerefMut};
+use std::ptr;
 use std::slice;
 use std::usize;
 
@@ -40,11 +41,23 @@ use std::usize;
 /// [`map_mut()`]: MmapOptions::map_mut()
 /// [`map_exec()`]: MmapOptions::map_exec()
 /// [`map_copy()`]: MmapOptions::map_copy()
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct MmapOptions {
+    address: *mut u8,
     offset: u64,
     len: Option<usize>,
     stack: bool,
+}
+
+impl Default for MmapOptions {
+    fn default() -> Self {
+        MmapOptions {
+            address: ptr::null_mut(),
+            offset: u64::default(),
+            len: Option::default(),
+            stack: bool::default(),
+        }
+    }
 }
 
 impl MmapOptions {
@@ -143,6 +156,12 @@ impl MmapOptions {
         })
     }
 
+    /// Configures the starting address of the created memory mapped buffer.
+    pub fn address(&mut self, address: *mut u8) -> &mut Self {
+        self.address = address;
+        self
+    }
+
     /// Configures the anonymous memory map to be suitable for a process or thread stack.
     ///
     /// This option corresponds to the `MAP_STACK` flag on Linux.
@@ -193,7 +212,7 @@ impl MmapOptions {
     /// # }
     /// ```
     pub unsafe fn map(&self, file: &File) -> Result<Mmap> {
-        MmapInner::map(self.get_len(file)?, file, self.offset).map(|inner| Mmap { inner: inner })
+        MmapInner::map(self.address, self.get_len(file)?, file, self.offset).map(|inner| Mmap { inner: inner })
     }
 
     /// Creates a readable and executable memory map backed by a file.
@@ -203,7 +222,7 @@ impl MmapOptions {
     /// This method returns an error when the underlying system call fails, which can happen for a
     /// variety of reasons, such as when the file is not open with read permissions.
     pub unsafe fn map_exec(&self, file: &File) -> Result<Mmap> {
-        MmapInner::map_exec(self.get_len(file)?, file, self.offset)
+        MmapInner::map_exec(self.address, self.get_len(file)?, file, self.offset)
             .map(|inner| Mmap { inner: inner })
     }
 
@@ -241,7 +260,7 @@ impl MmapOptions {
     /// # }
     /// ```
     pub unsafe fn map_mut(&self, file: &File) -> Result<MmapMut> {
-        MmapInner::map_mut(self.get_len(file)?, file, self.offset)
+        MmapInner::map_mut(self.address, self.get_len(file)?, file, self.offset)
             .map(|inner| MmapMut { inner: inner })
     }
 
@@ -270,7 +289,7 @@ impl MmapOptions {
     /// # }
     /// ```
     pub unsafe fn map_copy(&self, file: &File) -> Result<MmapMut> {
-        MmapInner::map_copy(self.get_len(file)?, file, self.offset)
+        MmapInner::map_copy(self.address, self.get_len(file)?, file, self.offset)
             .map(|inner| MmapMut { inner: inner })
     }
 
@@ -283,7 +302,7 @@ impl MmapOptions {
     ///
     /// This method returns an error when the underlying system call fails.
     pub fn map_anon(&self) -> Result<MmapMut> {
-        MmapInner::map_anon(self.len.unwrap_or(0), self.stack).map(|inner| MmapMut { inner: inner })
+        MmapInner::map_anon(self.address, self.len.unwrap_or(0), self.stack).map(|inner| MmapMut { inner: inner })
     }
 }
 
