@@ -2,7 +2,7 @@ extern crate libc;
 
 use std::fs::File;
 use std::os::unix::io::{AsRawFd, RawFd};
-use std::{io};
+use std::{io, ptr};
 
 #[cfg(any(
     all(target_os = "linux", not(target_arch = "mips")),
@@ -31,7 +31,7 @@ impl MmapInner {
         address: *mut u8,
         len: usize,
         prot: libc::c_int,
-        flags: libc::c_int,
+        mut flags: libc::c_int,
         file: RawFd,
         offset: u64,
     ) -> io::Result<MmapInner> {
@@ -44,6 +44,10 @@ impl MmapInner {
                 io::ErrorKind::InvalidInput,
                 "memory map must have a non-zero length",
             ));
+        }
+
+        if address != ptr::null_mut() {
+            flags |= libc::MAP_FIXED
         }
 
         unsafe {
