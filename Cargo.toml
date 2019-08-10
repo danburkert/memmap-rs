@@ -16,8 +16,5 @@ appveyor = { repository = "danburkert/mmap" }
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
 
-[target.'cfg(windows)'.dependencies]
-winapi = { version = "0.3", features = ["basetsd", "handleapi", "memoryapi", "minwindef", "std", "sysinfoapi"] }
-
 [dev-dependencies]
 tempdir = "0.3"
