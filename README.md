@@ -1,11 +1,12 @@
-# memmap
+# memmap2
+[![Build Status](https://travis-ci.org/RazrFalcon/memmap2-rs.svg?branch=master)](https://travis-ci.org/RazrFalcon/memmap2-rs)
+[![Windows Build status](https://ci.appveyor.com/api/projects/status/3518plsu6mutb07q/branch/master?svg=true)](https://ci.appveyor.com/project/RazrFalcon/memmap2-rs)
+[![Crate](https://img.shields.io/crates/v/memmap2.svg)](https://crates.io/crates/memmap2)
+[![Documentation](https://docs.rs/memmap2/badge.svg)](https://docs.rs/memmap2)
 
 A Rust library for cross-platform memory mapped IO.
 
-[![Build Status](https://travis-ci.org/danburkert/memmap-rs.svg?branch=master)](https://travis-ci.org/danburkert/memmap-rs)
-[![Windows Build Status](https://ci.appveyor.com/api/projects/status/ubka00959pstatkg/branch/master?svg=true)](https://ci.appveyor.com/project/danburkert/mmap)
-[![Documentation](https://docs.rs/memmap/badge.svg)](https://docs.rs/memmap)
-[![Crate](https://img.shields.io/crates/v/memmap.svg)](https://crates.io/crates/memmap)
+This is a **fork** of the [memmap-rs](https://github.com/danburkert/memmap-rs) crate.
 
 ## Features
 
@@ -20,11 +21,11 @@ A Rust library for cross-platform memory mapped IO.
 
 ## Platforms
 
-`memmap` should work on any platform supported by
+`memmap2` should work on any platform supported by
 [`libc`](https://github.com/rust-lang-nursery/libc#platforms-and-documentation).
-`memmap` requires Rust stable 1.13 or greater.
+`memmap2` requires Rust stable 1.13 or greater.
 
-`memmap` is continuously tested on:
+`memmap2` is continuously tested on:
   * `x86_64-unknown-linux-gnu` (Linux)
   * `i686-unknown-linux-gnu`
   * `x86_64-unknown-linux-musl` (Linux MUSL)
@@ -35,7 +36,7 @@ A Rust library for cross-platform memory mapped IO.
   * `x86_64-pc-windows-gnu`
   * `i686-pc-windows-gnu`
 
-`memmap` is continuously cross-compiled against:
+`memmap2` is continuously cross-compiled against:
   * `arm-linux-androideabi` (Android)
   * `aarch64-unknown-linux-gnu` (ARM)
   * `arm-unknown-linux-gnueabihf`
@@ -45,7 +46,7 @@ A Rust library for cross-platform memory mapped IO.
 
 ## License
 
-`memmap` is primarily distributed under the terms of both the MIT license and the
+`memmap2` is primarily distributed under the terms of both the MIT license and the
 Apache License (Version 2.0).
 
 See [LICENSE-APACHE](LICENSE-APACHE), [LICENSE-MIT](LICENSE-MIT) for details.

@@ -1,6 +1,6 @@
 //! A cross-platform Rust API for memory mapped buffers.
 
-#![doc(html_root_url = "https://docs.rs/memmap/0.7.0")]
+#![doc(html_root_url = "https://docs.rs/memmap2/0.7.0")]
 
 #[cfg(windows)]
 extern crate winapi;
@@ -53,7 +53,7 @@ impl MmapOptions {
     /// # Example
     ///
     /// ```
-    /// use memmap::{MmapMut, MmapOptions};
+    /// use memmap2::{MmapMut, MmapOptions};
     /// # use std::io::Result;
     ///
     /// # fn main() -> Result<()> {
@@ -83,7 +83,7 @@ impl MmapOptions {
     /// # Example
     ///
     /// ```
-    /// use memmap::MmapOptions;
+    /// use memmap2::MmapOptions;
     /// use std::fs::File;
     ///
     /// # fn main() -> std::io::Result<()> {
@@ -111,7 +111,7 @@ impl MmapOptions {
     /// # Example
     ///
     /// ```
-    /// use memmap::MmapOptions;
+    /// use memmap2::MmapOptions;
     /// use std::fs::File;
     ///
     /// # fn main() -> std::io::Result<()> {
@@ -152,7 +152,7 @@ impl MmapOptions {
     /// # Example
     ///
     /// ```
-    /// use memmap::MmapOptions;
+    /// use memmap2::MmapOptions;
     ///
     /// # fn main() -> std::io::Result<()> {
     /// let stack = MmapOptions::new().stack().len(4096).map_anon();
@@ -174,7 +174,7 @@ impl MmapOptions {
     /// # Example
     ///
     /// ```
-    /// use memmap::MmapOptions;
+    /// use memmap2::MmapOptions;
     /// use std::fs::File;
     /// use std::io::Read;
     ///
@@ -217,13 +217,13 @@ impl MmapOptions {
     /// # Example
     ///
     /// ```
-    /// # extern crate memmap;
+    /// # extern crate memmap2;
     /// # extern crate tempdir;
     /// #
     /// use std::fs::OpenOptions;
     /// use std::path::PathBuf;
     ///
-    /// use memmap::MmapOptions;
+    /// use memmap2::MmapOptions;
     /// #
     /// # fn main() -> std::io::Result<()> {
     /// # let tempdir = tempdir::TempDir::new("mmap")?;
@@ -258,7 +258,7 @@ impl MmapOptions {
     /// # Example
     ///
     /// ```
-    /// use memmap::MmapOptions;
+    /// use memmap2::MmapOptions;
     /// use std::fs::File;
     /// use std::io::Write;
     ///
@@ -315,7 +315,7 @@ impl MmapOptions {
 /// ## Example
 ///
 /// ```
-/// use memmap::MmapOptions;
+/// use memmap2::MmapOptions;
 /// use std::io::Write;
 /// use std::fs::File;
 ///
@@ -350,7 +350,7 @@ impl Mmap {
     /// use std::fs::File;
     /// use std::io::Read;
     ///
-    /// use memmap::Mmap;
+    /// use memmap2::Mmap;
     ///
     /// # fn main() -> std::io::Result<()> {
     /// let mut file = File::open("README.md")?;
@@ -380,10 +380,10 @@ impl Mmap {
     /// # Example
     ///
     /// ```
-    /// # extern crate memmap;
+    /// # extern crate memmap2;
     /// # extern crate tempdir;
     /// #
-    /// use memmap::Mmap;
+    /// use memmap2::Mmap;
     /// use std::ops::DerefMut;
     /// use std::io::Write;
     /// # use std::fs::OpenOptions;
@@ -480,13 +480,13 @@ impl MmapMut {
     /// # Example
     ///
     /// ```
-    /// # extern crate memmap;
+    /// # extern crate memmap2;
     /// # extern crate tempdir;
     /// #
     /// use std::fs::OpenOptions;
     /// use std::path::PathBuf;
     ///
-    /// use memmap::MmapMut;
+    /// use memmap2::MmapMut;
     /// #
     /// # fn main() -> std::io::Result<()> {
     /// # let tempdir = tempdir::TempDir::new("mmap")?;
@@ -529,14 +529,14 @@ impl MmapMut {
     /// # Example
     ///
     /// ```
-    /// # extern crate memmap;
+    /// # extern crate memmap2;
     /// # extern crate tempdir;
     /// #
     /// use std::fs::OpenOptions;
     /// use std::io::Write;
     /// use std::path::PathBuf;
     ///
-    /// use memmap::MmapMut;
+    /// use memmap2::MmapMut;
     ///
     /// # fn main() -> std::io::Result<()> {
     /// # let tempdir = tempdir::TempDir::new("mmap")?;
@@ -605,12 +605,12 @@ impl MmapMut {
     /// # Example
     ///
     /// ```
-    /// # extern crate memmap;
+    /// # extern crate memmap2;
     /// #
     /// use std::io::Write;
     /// use std::path::PathBuf;
     ///
-    /// use memmap::{Mmap, MmapMut};
+    /// use memmap2::{Mmap, MmapMut};
     ///
     /// # fn main() -> std::io::Result<()> {
     /// let mut mmap = MmapMut::map_anon(128)?;

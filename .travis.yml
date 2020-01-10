@@ -8,7 +8,7 @@ sudo: required
 
 env:
   global:
-    - CRATE_NAME=memmap
+    - CRATE_NAME=memmap2
 
 matrix:
   include:
