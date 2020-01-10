@@ -1,20 +1,128 @@
+#![allow(non_camel_case_types)]
+#![allow(non_snake_case)]
+
 use std::fs::File;
 use std::os::raw::c_void;
 use std::os::windows::io::{AsRawHandle, RawHandle};
 use std::{io, mem, ptr};
 
-use winapi::shared::basetsd::SIZE_T;
-use winapi::shared::minwindef::DWORD;
-use winapi::um::handleapi::{CloseHandle, INVALID_HANDLE_VALUE};
-use winapi::um::memoryapi::{
-    CreateFileMappingW, FlushViewOfFile, MapViewOfFile, UnmapViewOfFile, VirtualProtect,
-    FILE_MAP_ALL_ACCESS, FILE_MAP_COPY, FILE_MAP_EXECUTE, FILE_MAP_READ, FILE_MAP_WRITE,
-};
-use winapi::um::sysinfoapi::GetSystemInfo;
-use winapi::um::winnt::{
-    PAGE_EXECUTE_READ, PAGE_EXECUTE_READWRITE, PAGE_EXECUTE_WRITECOPY, PAGE_READONLY,
-    PAGE_READWRITE, PAGE_WRITECOPY,
-};
+type BOOL = i32;
+type WORD = u16;
+type DWORD = u32;
+type WCHAR = u16;
+type HANDLE = *mut c_void;
+type LPVOID = *mut c_void;
+type LPCVOID = *const c_void;
+type ULONG_PTR = usize;
+type SIZE_T = ULONG_PTR;
+type LPCWSTR = *const WCHAR;
+type PDWORD = *mut DWORD;
+type DWORD_PTR = ULONG_PTR;
+type LPSECURITY_ATTRIBUTES = *mut SECURITY_ATTRIBUTES;
+type LPSYSTEM_INFO = *mut SYSTEM_INFO;
+
+const INVALID_HANDLE_VALUE: HANDLE = -1isize as HANDLE;
+
+const STANDARD_RIGHTS_REQUIRED: DWORD = 0x000F0000;
+
+const SECTION_QUERY: DWORD = 0x0001;
+const SECTION_MAP_WRITE: DWORD = 0x0002;
+const SECTION_MAP_READ: DWORD = 0x0004;
+const SECTION_MAP_EXECUTE: DWORD = 0x0008;
+const SECTION_EXTEND_SIZE: DWORD = 0x0010;
+const SECTION_MAP_EXECUTE_EXPLICIT: DWORD = 0x0020;
+const SECTION_ALL_ACCESS: DWORD = STANDARD_RIGHTS_REQUIRED | SECTION_QUERY
+    | SECTION_MAP_WRITE | SECTION_MAP_READ | SECTION_MAP_EXECUTE | SECTION_EXTEND_SIZE;
+
+const PAGE_READONLY: DWORD = 0x02;
+const PAGE_READWRITE: DWORD = 0x04;
+const PAGE_WRITECOPY: DWORD = 0x08;
+const PAGE_EXECUTE_READ: DWORD = 0x20;
+const PAGE_EXECUTE_READWRITE: DWORD = 0x40;
+const PAGE_EXECUTE_WRITECOPY: DWORD = 0x80;
+
+const FILE_MAP_WRITE: DWORD = SECTION_MAP_WRITE;
+const FILE_MAP_READ: DWORD = SECTION_MAP_READ;
+const FILE_MAP_ALL_ACCESS: DWORD = SECTION_ALL_ACCESS;
+const FILE_MAP_EXECUTE: DWORD = SECTION_MAP_EXECUTE_EXPLICIT;
+const FILE_MAP_COPY: DWORD = 0x00000001;
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct SECURITY_ATTRIBUTES {
+    nLength: DWORD,
+    lpSecurityDescriptor: LPVOID,
+    bInheritHandle: BOOL,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct SYSTEM_INFO_u_s {
+    wProcessorArchitecture: WORD,
+    wReserved: WORD,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct SYSTEM_INFO_u([u32; (1)]);
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct SYSTEM_INFO {
+    u: SYSTEM_INFO_u,
+    dwPageSize: DWORD,
+    lpMinimumApplicationAddress: LPVOID,
+    lpMaximumApplicationAddress: LPVOID,
+    dwActiveProcessorMask: DWORD_PTR,
+    dwNumberOfProcessors: DWORD,
+    dwProcessorType: DWORD,
+    dwAllocationGranularity: DWORD,
+    wProcessorLevel: WORD,
+    wProcessorRevision: WORD,
+}
+
+extern "system" {
+    fn CloseHandle(
+        hObject: HANDLE,
+    ) -> BOOL;
+
+    fn CreateFileMappingW(
+        hFile: HANDLE,
+        lpFileMappingAttributes: LPSECURITY_ATTRIBUTES,
+        flProtect: DWORD,
+        dwMaximumSizeHigh: DWORD,
+        dwMaximumSizeLow: DWORD,
+        lpName: LPCWSTR,
+    ) -> HANDLE;
+
+    fn FlushViewOfFile(
+        lpBaseAddress: LPCVOID,
+        dwNumberOfBytesToFlush: SIZE_T,
+    ) -> BOOL;
+
+    fn UnmapViewOfFile(
+        lpBaseAddress: LPCVOID,
+    ) -> BOOL;
+
+    fn MapViewOfFile(
+        hFileMappingObject: HANDLE,
+        dwDesiredAccess: DWORD,
+        dwFileOffsetHigh: DWORD,
+        dwFileOffsetLow: DWORD,
+        dwNumberOfBytesToMap: SIZE_T,
+    ) -> LPVOID;
+
+    fn VirtualProtect(
+        lpAddress: LPVOID,
+        dwSize: SIZE_T,
+        flNewProtect: DWORD,
+        lpflOldProtect: PDWORD,
+    ) -> BOOL;
+
+    fn GetSystemInfo(
+        lpSystemInfo: LPSYSTEM_INFO,
+    );
+}
 
 pub struct MmapInner {
     file: Option<File>,

@@ -3,8 +3,6 @@
 #![doc(html_root_url = "https://docs.rs/memmap2/0.7.0")]
 
 #[cfg(windows)]
-extern crate winapi;
-#[cfg(windows)]
 mod windows;
 #[cfg(windows)]
 use windows::MmapInner;
@@ -681,10 +679,7 @@ impl fmt::Debug for MmapMut {
 
 #[cfg(test)]
 mod test {
-
     extern crate tempdir;
-    #[cfg(windows)]
-    extern crate winapi;
 
     use std::fs::OpenOptions;
     use std::io::{Read, Write};
@@ -694,7 +689,7 @@ mod test {
     use std::thread;
 
     #[cfg(windows)]
-    use winapi::um::winnt::GENERIC_ALL;
+    const GENERIC_ALL: u32 = 0x10000000;
 
     use super::{Mmap, MmapMut, MmapOptions};
 

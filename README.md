@@ -11,6 +11,7 @@ This is a **fork** of the [memmap-rs](https://github.com/danburkert/memmap-rs) c
 
 ## Changes
 
+- Remove `winapi` dependency. [memmap-rs/pull/89](https://github.com/danburkert/memmap-rs/pull/89)
 - Use `LICENSE-APACHE` instead of `README.md` for some tests since it's immutable.
 
 ## Features
