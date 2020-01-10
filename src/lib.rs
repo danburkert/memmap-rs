@@ -89,11 +89,11 @@ impl MmapOptions {
     /// # fn main() -> std::io::Result<()> {
     /// let mmap = unsafe {
     ///     MmapOptions::new()
-    ///                 .offset(10)
-    ///                 .map(&File::open("README.md")?)?
+    ///                 .offset(30)
+    ///                 .map(&File::open("LICENSE-APACHE")?)?
     /// };
-    /// assert_eq!(&b"A Rust library for cross-platform memory mapped IO."[..],
-    ///            &mmap[..51]);
+    /// assert_eq!(&b"Apache License"[..],
+    ///            &mmap[..14]);
     /// # Ok(())
     /// # }
     /// ```
@@ -117,10 +117,10 @@ impl MmapOptions {
     /// # fn main() -> std::io::Result<()> {
     /// let mmap = unsafe {
     ///     MmapOptions::new()
-    ///                 .len(8)
+    ///                 .len(9)
     ///                 .map(&File::open("README.md")?)?
     /// };
-    /// assert_eq!(&b"# memmap"[..], &mmap[..]);
+    /// assert_eq!(&b"# memmap2"[..], &mmap[..]);
     /// # Ok(())
     /// # }
     /// ```
@@ -179,7 +179,7 @@ impl MmapOptions {
     /// use std::io::Read;
     ///
     /// # fn main() -> std::io::Result<()> {
-    /// let mut file = File::open("README.md")?;
+    /// let mut file = File::open("LICENSE-APACHE")?;
     ///
     /// let mut contents = Vec::new();
     /// file.read_to_end(&mut contents)?;
@@ -263,7 +263,7 @@ impl MmapOptions {
     /// use std::io::Write;
     ///
     /// # fn main() -> std::io::Result<()> {
-    /// let file = File::open("README.md")?;
+    /// let file = File::open("LICENSE-APACHE")?;
     /// let mut mmap = unsafe { MmapOptions::new().map_copy(&file)? };
     /// (&mut mmap[..]).write_all(b"Hello, world!")?;
     /// # Ok(())
@@ -322,7 +322,7 @@ impl MmapOptions {
 /// # fn main() -> std::io::Result<()> {
 /// let file = File::open("README.md")?;
 /// let mmap = unsafe { MmapOptions::new().map(&file)? };
-/// assert_eq!(b"# memmap", &mmap[0..8]);
+/// assert_eq!(b"# memmap2", &mmap[0..9]);
 /// # Ok(())
 /// # }
 /// ```
@@ -353,7 +353,7 @@ impl Mmap {
     /// use memmap2::Mmap;
     ///
     /// # fn main() -> std::io::Result<()> {
-    /// let mut file = File::open("README.md")?;
+    /// let mut file = File::open("LICENSE-APACHE")?;
     ///
     /// let mut contents = Vec::new();
     /// file.read_to_end(&mut contents)?;

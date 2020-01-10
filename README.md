@@ -3,10 +3,15 @@
 [![Windows Build status](https://ci.appveyor.com/api/projects/status/3518plsu6mutb07q/branch/master?svg=true)](https://ci.appveyor.com/project/RazrFalcon/memmap2-rs)
 [![Crate](https://img.shields.io/crates/v/memmap2.svg)](https://crates.io/crates/memmap2)
 [![Documentation](https://docs.rs/memmap2/badge.svg)](https://docs.rs/memmap2)
+[![Rust 1.13+](https://img.shields.io/badge/rust-1.13+-orange.svg)](https://www.rust-lang.org)
 
 A Rust library for cross-platform memory mapped IO.
 
 This is a **fork** of the [memmap-rs](https://github.com/danburkert/memmap-rs) crate.
+
+## Changes
+
+- Use `LICENSE-APACHE` instead of `README.md` for some tests since it's immutable.
 
 ## Features
 
