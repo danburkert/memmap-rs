@@ -20,7 +20,7 @@ const MAP_STACK: libc::c_int = 0;
 
 pub struct MmapInner {
     ptr: *mut libc::c_void,
-    len: usize,
+    len: usize
 }
 
 impl MmapInner {
@@ -60,7 +60,7 @@ impl MmapInner {
             } else {
                 Ok(MmapInner {
                     ptr: ptr.offset(alignment as isize),
-                    len: len,
+                    len
                 })
             }
         }
@@ -174,6 +174,40 @@ impl MmapInner {
         self.mprotect(libc::PROT_READ | libc::PROT_WRITE)
     }
 
+    #[cfg(
+    all(
+        any(
+            all(target_os = "linux", not(target_arch = "mips")),
+            target_os = "freebsd"
+        ),
+        not(target_os = "ios")
+    ))]
+    pub fn resize_with_flag(&mut self, len: usize, flag: libc::c_int) -> io::Result<()> {
+        unsafe {
+            let new_addr = libc::mremap(self.ptr, self.len, len, flag);
+            if new_addr == libc::MAP_FAILED {
+                Err(io::Error::last_os_error())
+            } else {
+                self.ptr = new_addr;
+                self.len = len;
+                Ok(())
+            }
+
+        }
+    }
+
+    #[cfg(
+    all(
+        any(
+            all(target_os = "linux", not(target_arch = "mips")),
+            target_os = "freebsd"
+        ),
+        not(target_os = "ios")
+    ))]
+    pub fn resize(&mut self, len: usize) -> io::Result<()> {
+        self.resize_with_flag(len, libc::MREMAP_MAYMOVE)
+    }
+
     #[inline]
     pub fn ptr(&self) -> *const u8 {
         self.ptr as *const u8
@@ -194,14 +228,10 @@ impl Drop for MmapInner {
     fn drop(&mut self) {
         let alignment = self.ptr as usize % page_size();
         unsafe {
-            assert!(
-                libc::munmap(
-                    self.ptr.offset(-(alignment as isize)),
-                    (self.len + alignment) as libc::size_t
-                ) == 0,
-                "unable to unmap mmap: {}",
-                io::Error::last_os_error()
-            );
+            assert_eq!(libc::munmap(
+                self.ptr.offset(-(alignment as isize)),
+                (self.len + alignment) as libc::size_t
+            ), 0, "unable to unmap mmap: {}", io::Error::last_os_error());
         }
     }
 }

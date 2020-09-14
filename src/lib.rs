@@ -638,6 +638,37 @@ impl MmapMut {
         self.inner.make_exec()?;
         Ok(Mmap { inner: self.inner })
     }
+
+    #[cfg(
+    all(
+        any(
+            all(target_os = "linux", not(target_arch = "mips")),
+            target_os = "freebsd"
+        ),
+        not(target_os = "ios")
+    ))]
+    /// Equivalent to resize_with_flag(len, libc::MREMAP_MAYMOVE)
+    pub fn resize(&mut self, len: usize) -> Result<()> {
+        self.inner.resize(len)
+    }
+
+    #[cfg(
+    all(
+        any(
+            all(target_os = "linux", not(target_arch = "mips")),
+            target_os = "freebsd"
+        ),
+        not(target_os = "ios")
+    ))]
+    /// Corresponding to mremap() in libc, expands (or shrinks) an existing memory mapping, potentially
+    /// moving it at the same time (controlled by the flags argument and the available virtual address space).
+    /// Available flags(See mremap(2) — Linux manual page):
+    ///        MREMAP_MAYMOVE(By default)
+    ///        MREMAP_FIXED (since Linux 2.3.31)
+    ///        MREMAP_DONTUNMAP (since Linux 5.7)
+    pub fn resize_with_flag(&mut self, len: usize, flag: libc::c_int) -> Result<()> {
+        self.inner.resize_with_flag(len, flag)
+    }
 }
 
 impl Deref for MmapMut {
@@ -1057,4 +1088,14 @@ mod test {
         let mmap = mmap.make_exec().expect("make_exec");
         drop(mmap);
     }
+    #[cfg(any(
+    all(target_os = "linux", not(target_arch = "mips")),
+    target_os = "freebsd"
+    ))]
+    #[test]
+    fn resize() {
+        let mut mmap = MmapMut::map_anon(256).expect("map_mut");
+        mmap.resize(512).expect("resize");
+    }
+
 }
