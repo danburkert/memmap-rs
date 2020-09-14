@@ -177,7 +177,6 @@ impl MmapInner {
     #[cfg(any(
     all(target_os = "linux", not(target_arch = "mips")),
     target_os = "freebsd",
-    target_os = "android"
     ))]
     pub fn resize_with_flag(&mut self, len: usize, flag: libc::c_int) -> io::Result<()> {
         unsafe {
@@ -194,9 +193,8 @@ impl MmapInner {
     }
 
     #[cfg(any(
-    all(target_os = "linux", not(target_arch = "mips")),
-    target_os = "freebsd",
-    target_os = "android"
+    all(target_os = "linux", not(target_arch = "mips"), not(target_arch = "mips")),
+    target_os = "freebsd"
     ))]
     pub fn resize(&mut self, len: usize) -> io::Result<()> {
         self.resize_with_flag(len, libc::MREMAP_MAYMOVE)
