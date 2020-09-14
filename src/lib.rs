@@ -639,18 +639,26 @@ impl MmapMut {
         Ok(Mmap { inner: self.inner })
     }
 
-    #[cfg(any(
-    all(target_os = "linux", not(target_arch = "mips")),
-    target_os = "freebsd"
+    #[cfg(
+    all(
+        any(
+            all(target_os = "linux", not(target_arch = "mips")),
+            target_os = "freebsd"
+        ),
+        not(target_os = "ios")
     ))]
     /// Equivalent to resize_with_flag(len, libc::MREMAP_MAYMOVE)
     pub fn resize(&mut self, len: usize) -> Result<()> {
         self.inner.resize(len)
     }
 
-    #[cfg(any(
-    all(target_os = "linux", not(target_arch = "mips")),
-    target_os = "freebsd"
+    #[cfg(
+    all(
+        any(
+            all(target_os = "linux", not(target_arch = "mips")),
+            target_os = "freebsd"
+        ),
+        not(target_os = "ios")
     ))]
     /// Corresponding to mremap() in libc, expands (or shrinks) an existing memory mapping, potentially
     /// moving it at the same time (controlled by the flags argument and the available virtual address space).
