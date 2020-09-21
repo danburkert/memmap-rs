@@ -45,6 +45,8 @@ pub struct MmapOptions {
     offset: u64,
     len: Option<usize>,
     stack: bool,
+    locked: bool,
+    private: bool,
 }
 
 impl MmapOptions {
@@ -164,6 +166,24 @@ impl MmapOptions {
         self
     }
 
+    /// Configures the memory map to be locked using.
+    ///
+    /// This option corresponds to the `MAP_LOCKED` flag on Linux, and has no effect on Window and MacOS.
+    ///
+    /// Note this requires privileged access.
+    pub fn lock(&mut self) -> &mut Self {
+        self.locked = true;
+        self
+    }
+
+    /// Configures the memory map to be private.
+    ///
+    /// This option corresponds to the `MAP_PRIVATE` flag on Linux.
+    pub fn private(&mut self) -> &mut Self {
+        self.private = true;
+        self
+    }
+
     /// Creates a read-only memory map backed by a file.
     ///
     /// # Errors
@@ -193,7 +213,7 @@ impl MmapOptions {
     /// # }
     /// ```
     pub unsafe fn map(&self, file: &File) -> Result<Mmap> {
-        MmapInner::map(self.get_len(file)?, file, self.offset).map(|inner| Mmap { inner: inner })
+        MmapInner::map(self.get_len(file)?, file, self.offset, self.locked, self.private).map(|inner| Mmap { inner: inner })
     }
 
     /// Creates a readable and executable memory map backed by a file.
@@ -203,7 +223,7 @@ impl MmapOptions {
     /// This method returns an error when the underlying system call fails, which can happen for a
     /// variety of reasons, such as when the file is not open with read permissions.
     pub unsafe fn map_exec(&self, file: &File) -> Result<Mmap> {
-        MmapInner::map_exec(self.get_len(file)?, file, self.offset)
+        MmapInner::map_exec(self.get_len(file)?, file, self.offset, self.locked, self.private)
             .map(|inner| Mmap { inner: inner })
     }
 
@@ -241,7 +261,7 @@ impl MmapOptions {
     /// # }
     /// ```
     pub unsafe fn map_mut(&self, file: &File) -> Result<MmapMut> {
-        MmapInner::map_mut(self.get_len(file)?, file, self.offset)
+        MmapInner::map_mut(self.get_len(file)?, file, self.offset, self.locked, self.private)
             .map(|inner| MmapMut { inner: inner })
     }
 
@@ -270,7 +290,7 @@ impl MmapOptions {
     /// # }
     /// ```
     pub unsafe fn map_copy(&self, file: &File) -> Result<MmapMut> {
-        MmapInner::map_copy(self.get_len(file)?, file, self.offset)
+        MmapInner::map_copy(self.get_len(file)?, file, self.offset, self.locked)
             .map(|inner| MmapMut { inner: inner })
     }
 
@@ -283,7 +303,7 @@ impl MmapOptions {
     ///
     /// This method returns an error when the underlying system call fails.
     pub fn map_anon(&self) -> Result<MmapMut> {
-        MmapInner::map_anon(self.len.unwrap_or(0), self.stack).map(|inner| MmapMut { inner: inner })
+        MmapInner::map_anon(self.len.unwrap_or(0), self.stack, self.locked, self.private).map(|inner| MmapMut { inner: inner })
     }
 }
 
@@ -408,6 +428,26 @@ impl Mmap {
     pub fn make_mut(mut self) -> Result<MmapMut> {
         self.inner.make_mut()?;
         Ok(MmapMut { inner: self.inner })
+    }
+
+    /// Uses `mlock` to lock the whole memory map into RAM.
+    ///
+    /// Note this requires privileged access.
+    #[cfg(unix)]
+    pub fn mlock(&mut self) -> Result<()> {
+        self.inner.mlock()?;
+        
+        Ok(())
+    }
+
+    /// Uses `munlock` to unlock the whole memory map.
+    ///
+    /// Note this requires privileged access.
+    #[cfg(unix)]
+    pub fn munlock(&mut self) -> Result<()> {
+        self.inner.munlock()?;
+        
+        Ok(())
     }
 }
 
@@ -637,6 +677,26 @@ impl MmapMut {
     pub fn make_exec(mut self) -> Result<Mmap> {
         self.inner.make_exec()?;
         Ok(Mmap { inner: self.inner })
+    }
+
+    /// Uses `mlock` to lock the whole memory map into RAM.
+    ///
+    /// Note this requires privileged access.
+    #[cfg(unix)]
+    pub fn mlock(&mut self) -> Result<()> {
+        self.inner.mlock()?;
+        
+        Ok(())
+    }
+
+    /// Uses `munlock` to unlock the whole memory map.
+    ///
+    /// Note this requires privileged access.
+    #[cfg(unix)]
+    pub fn munlock(&mut self) -> Result<()> {
+        self.inner.munlock()?;
+        
+        Ok(())
     }
 }
 
