@@ -18,6 +18,21 @@ const MAP_STACK: libc::c_int = libc::MAP_STACK;
 )))]
 const MAP_STACK: libc::c_int = 0;
 
+
+#[cfg(any(
+    all(target_os = "linux", not(target_arch = "mips")),
+    target_os = "freebsd",
+    target_os = "android"
+))]
+const MAP_LOCKED: libc::c_int = libc::MAP_LOCKED;
+
+#[cfg(not(any(
+    all(target_os = "linux", not(target_arch = "mips")),
+    target_os = "freebsd",
+    target_os = "android"
+)))]
+const MAP_LOCKED: libc::c_int = 0;
+
 pub struct MmapInner {
     ptr: *mut libc::c_void,
     len: usize,
@@ -66,53 +81,63 @@ impl MmapInner {
         }
     }
 
-    pub fn map(len: usize, file: &File, offset: u64) -> io::Result<MmapInner> {
+    pub fn map(len: usize, file: &File, offset: u64, locked: bool, private: bool) -> io::Result<MmapInner> {
+        let locked = if locked { MAP_LOCKED } else { 0 };
+        let private = if private { libc::MAP_PRIVATE } else { libc::MAP_SHARED };
         MmapInner::new(
             len,
             libc::PROT_READ,
-            libc::MAP_SHARED,
+            locked | private,
             file.as_raw_fd(),
             offset,
         )
     }
 
-    pub fn map_exec(len: usize, file: &File, offset: u64) -> io::Result<MmapInner> {
+    pub fn map_exec(len: usize, file: &File, offset: u64, locked: bool, private: bool) -> io::Result<MmapInner> {
+        let locked = if locked { MAP_LOCKED } else { 0 };
+        let private = if private { libc::MAP_PRIVATE } else { libc::MAP_SHARED };
         MmapInner::new(
             len,
             libc::PROT_READ | libc::PROT_EXEC,
-            libc::MAP_SHARED,
+            locked | private,
             file.as_raw_fd(),
             offset,
         )
     }
 
-    pub fn map_mut(len: usize, file: &File, offset: u64) -> io::Result<MmapInner> {
+    pub fn map_mut(len: usize, file: &File, offset: u64, locked: bool, private: bool) -> io::Result<MmapInner> {
+        let locked = if locked { MAP_LOCKED } else { 0 };
+        let private = if private { libc::MAP_PRIVATE } else { libc::MAP_SHARED };
         MmapInner::new(
             len,
             libc::PROT_READ | libc::PROT_WRITE,
-            libc::MAP_SHARED,
+            locked | private,
             file.as_raw_fd(),
             offset,
         )
     }
 
-    pub fn map_copy(len: usize, file: &File, offset: u64) -> io::Result<MmapInner> {
+    pub fn map_copy(len: usize, file: &File, offset: u64, locked: bool) -> io::Result<MmapInner> {
+        let locked = if locked { MAP_LOCKED } else { 0 };
+
         MmapInner::new(
             len,
             libc::PROT_READ | libc::PROT_WRITE,
-            libc::MAP_PRIVATE,
+            libc::MAP_PRIVATE | locked,
             file.as_raw_fd(),
             offset,
         )
     }
 
     /// Open an anonymous memory map.
-    pub fn map_anon(len: usize, stack: bool) -> io::Result<MmapInner> {
+    pub fn map_anon(len: usize, stack: bool, locked: bool, private: bool) -> io::Result<MmapInner> {
         let stack = if stack { MAP_STACK } else { 0 };
+        let locked = if locked { MAP_LOCKED } else { 0 };
+        let private = if private { libc::MAP_PRIVATE } else { libc::MAP_SHARED };
         MmapInner::new(
             len,
             libc::PROT_READ | libc::PROT_WRITE,
-            libc::MAP_SHARED | libc::MAP_ANON | stack,
+            libc::MAP_ANON | stack | locked | private,
             -1,
             0,
         )
@@ -187,6 +212,26 @@ impl MmapInner {
     #[inline]
     pub fn len(&self) -> usize {
         self.len
+    }
+
+    pub fn mlock(&self) -> io::Result<()> {
+        unsafe {
+            if libc::mlock(self.ptr, self.len) == 0 {
+                Ok(())
+            } else {
+                Err(io::Error::last_os_error())
+            }
+        }
+    }
+    
+    pub fn munlock(&self) -> io::Result<()> {
+        unsafe {
+            if libc::munlock(self.ptr, self.len) == 0 {
+                Ok(())
+            } else {
+                Err(io::Error::last_os_error())
+            }
+        }
     }
 }
 
