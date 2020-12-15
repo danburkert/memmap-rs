@@ -64,7 +64,7 @@ struct SYSTEM_INFO_u_s {
 
 #[repr(C)]
 #[derive(Clone, Copy)]
-struct SYSTEM_INFO_u([u32; (1)]);
+struct SYSTEM_INFO_u([u32; 1]);
 
 #[repr(C)]
 #[derive(Clone, Copy)]

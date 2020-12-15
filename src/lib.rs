@@ -10,7 +10,7 @@ use windows::MmapInner;
 #[cfg(unix)]
 mod unix;
 #[cfg(unix)]
-use unix::MmapInner;
+use crate::unix::MmapInner;
 
 use std::fmt;
 use std::fs::File;

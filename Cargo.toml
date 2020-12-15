@@ -7,10 +7,7 @@ repository = "https://github.com/RazrFalcon/memmap2-rs"
 documentation = "https://docs.rs/memmap2"
 description = "Cross-platform Rust API for memory-mapped file IO"
 keywords = ["mmap", "memory-map", "io", "file"]
-
-[badges]
-travis-ci = { repository = "RazrFalcon/memmap2-rs" }
-appveyor = { repository = "RazrFalcon/memmap2-rs" }
+edition = "2018"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

@@ -1,0 +1,77 @@
+name: Rust
+
+on: [push, pull_request]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test-win:
+    runs-on: windows-2019
+    strategy:
+      matrix:
+        target:
+          - i686-pc-windows-gnu
+          - i686-pc-windows-msvc
+          - x86_64-pc-windows-gnu
+          - x86_64-pc-windows-msvc
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+
+    - name: Install toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        target: ${{ matrix.target }}
+        override: true
+
+    - name: Run tests
+      run: cargo test
+
+  test-macos-catalina:
+    runs-on: macos-10.15
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+
+    - name: Run tests
+      run: cargo test
+
+  test-linux:
+    runs-on: ubuntu-18.04
+    strategy:
+      matrix:
+        target:
+          - i686-unknown-linux-gnu
+          - i686-unknown-linux-musl
+          - x86_64-unknown-linux-gnu
+          - x86_64-unknown-linux-musl
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+
+    - name: Install toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        target: ${{ matrix.target }}
+        override: true
+
+    - name: Run tests
+      run: cargo test
+
+  test-msrv:
+    runs-on: ubuntu-18.04
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+
+    - name: Install toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: 1.32.0
+        override: true
+
+    - name: Run tests
+      run: cargo test
