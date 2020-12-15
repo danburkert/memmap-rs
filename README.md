@@ -48,7 +48,6 @@ This is a **fork** of the [memmap-rs](https://github.com/danburkert/memmap-rs) c
   * `arm-unknown-linux-gnueabihf`
   * `mips-unknown-linux-gnu` (MIPS)
   * `x86_64-apple-ios` (iOS)
-  * `i686-apple-ios`
 
 ## License
 
