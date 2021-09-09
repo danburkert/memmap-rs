@@ -1,6 +1,6 @@
 //! A cross-platform Rust API for memory mapped buffers.
 
-#![doc(html_root_url = "https://docs.rs/memmap/0.7.0")]
+#![doc(html_root_url = "https://docs.rs/memmap/0.7.1")]
 
 #[cfg(windows)]
 extern crate winapi;
@@ -20,6 +20,9 @@ use std::io::{Error, ErrorKind, Result};
 use std::ops::{Deref, DerefMut};
 use std::slice;
 use std::usize;
+
+extern crate stable_deref_trait;
+use stable_deref_trait::StableDeref;
 
 /// A memory map builder, providing advanced options and flags for specifying memory map behavior.
 ///
@@ -411,6 +414,8 @@ impl Mmap {
     }
 }
 
+unsafe impl StableDeref for Mmap {}
+
 impl Deref for Mmap {
     type Target = [u8];
 
@@ -639,6 +644,8 @@ impl MmapMut {
         Ok(Mmap { inner: self.inner })
     }
 }
+
+unsafe impl StableDeref for MmapMut {}
 
 impl Deref for MmapMut {
     type Target = [u8];
@@ -1056,5 +1063,22 @@ mod test {
         let mmap = mmap.make_mut().expect("make_mut");
         let mmap = mmap.make_exec().expect("make_exec");
         drop(mmap);
+    }
+
+    /// Something that relies on StableDeref
+    #[test]
+    fn owning_ref() {
+        extern crate owning_ref;
+
+        let mut map = MmapMut::map_anon(128).unwrap();
+        map[10] = 42;
+        let owning = owning_ref::OwningRef::new(map);
+        let sliced = owning.map(|map| &map[10..20]);
+        assert_eq!(42, sliced[0]);
+
+        let map = sliced.into_owner().make_read_only().unwrap();
+        let owning = owning_ref::OwningRef::new(map);
+        let sliced = owning.map(|map| &map[10..20]);
+        assert_eq!(42, sliced[0]);
     }
 }

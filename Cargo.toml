@@ -1,7 +1,7 @@
 [package]
 name = "memmap"
 # NB: When modifying, also modify html_root_url in lib.rs
-version = "0.7.0"
+version = "0.7.1"
 authors = ["Dan Burkert <dan@danburkert.com>"]
 license = "MIT/Apache-2.0"
 repository = "https://github.com/danburkert/memmap-rs"
@@ -13,6 +13,9 @@ keywords = ["mmap", "memory-map", "io", "file"]
 travis-ci = { repository = "danburkert/memmap-rs" }
 appveyor = { repository = "danburkert/mmap" }
 
+[dependencies]
+stable_deref_trait = "1.2.0"
+
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
 
@@ -21,3 +24,4 @@ winapi = { version = "0.3", features = ["basetsd", "handleapi", "memoryapi", "mi
 
 [dev-dependencies]
 tempdir = "0.3"
+owning_ref = "0.4.1"
