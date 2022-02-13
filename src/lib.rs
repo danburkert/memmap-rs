@@ -218,7 +218,7 @@ impl MmapOptions {
     ///
     /// ```
     /// # extern crate memmap;
-    /// # extern crate tempdir;
+    /// # extern crate tempfile;
     /// #
     /// use std::fs::OpenOptions;
     /// use std::path::PathBuf;
@@ -226,7 +226,7 @@ impl MmapOptions {
     /// use memmap::MmapOptions;
     /// #
     /// # fn main() -> std::io::Result<()> {
-    /// # let tempdir = tempdir::TempDir::new("mmap")?;
+    /// # let tempdir = tempfile::tempdir()?;
     /// let path: PathBuf = /* path to file */
     /// #   tempdir.path().join("map_mut");
     /// let file = OpenOptions::new().read(true).write(true).create(true).open(&path)?;
@@ -381,7 +381,7 @@ impl Mmap {
     ///
     /// ```
     /// # extern crate memmap;
-    /// # extern crate tempdir;
+    /// # extern crate tempfile;
     /// #
     /// use memmap::Mmap;
     /// use std::ops::DerefMut;
@@ -389,7 +389,7 @@ impl Mmap {
     /// # use std::fs::OpenOptions;
     ///
     /// # fn main() -> std::io::Result<()> {
-    /// # let tempdir = tempdir::TempDir::new("mmap")?;
+    /// # let tempdir = tempfile::tempdir()?;
     /// let file = /* file opened with write permissions */
     /// #          OpenOptions::new()
     /// #                      .read(true)
@@ -481,7 +481,7 @@ impl MmapMut {
     ///
     /// ```
     /// # extern crate memmap;
-    /// # extern crate tempdir;
+    /// # extern crate tempfile;
     /// #
     /// use std::fs::OpenOptions;
     /// use std::path::PathBuf;
@@ -489,7 +489,7 @@ impl MmapMut {
     /// use memmap::MmapMut;
     /// #
     /// # fn main() -> std::io::Result<()> {
-    /// # let tempdir = tempdir::TempDir::new("mmap")?;
+    /// # let tempdir = tempfile::tempdir()?;
     /// let path: PathBuf = /* path to file */
     /// #   tempdir.path().join("map_mut");
     /// let file = OpenOptions::new()
@@ -530,7 +530,7 @@ impl MmapMut {
     ///
     /// ```
     /// # extern crate memmap;
-    /// # extern crate tempdir;
+    /// # extern crate tempfile;
     /// #
     /// use std::fs::OpenOptions;
     /// use std::io::Write;
@@ -539,7 +539,7 @@ impl MmapMut {
     /// use memmap::MmapMut;
     ///
     /// # fn main() -> std::io::Result<()> {
-    /// # let tempdir = tempdir::TempDir::new("mmap")?;
+    /// # let tempdir = tempfile::tempdir()?;
     /// let path: PathBuf = /* path to file */
     /// #   tempdir.path().join("flush");
     /// let file = OpenOptions::new().read(true).write(true).create(true).open(&path)?;
@@ -682,7 +682,7 @@ impl fmt::Debug for MmapMut {
 #[cfg(test)]
 mod test {
 
-    extern crate tempdir;
+    extern crate tempfile;
     #[cfg(windows)]
     extern crate winapi;
 
@@ -701,7 +701,7 @@ mod test {
     #[test]
     fn map_file() {
         let expected_len = 128;
-        let tempdir = tempdir::TempDir::new("mmap").unwrap();
+        let tempdir = tempfile::tempdir().unwrap();
         let path = tempdir.path().join("mmap");
 
         let file = OpenOptions::new()
@@ -733,7 +733,7 @@ mod test {
     /// Checks that a 0-length file will not be mapped.
     #[test]
     fn map_empty_file() {
-        let tempdir = tempdir::TempDir::new("mmap").unwrap();
+        let tempdir = tempfile::tempdir().unwrap();
         let path = tempdir.path().join("mmap");
 
         let file = OpenOptions::new()
@@ -773,7 +773,7 @@ mod test {
 
     #[test]
     fn file_write() {
-        let tempdir = tempdir::TempDir::new("mmap").unwrap();
+        let tempdir = tempfile::tempdir().unwrap();
         let path = tempdir.path().join("mmap");
 
         let mut file = OpenOptions::new()
@@ -797,7 +797,7 @@ mod test {
 
     #[test]
     fn flush_range() {
-        let tempdir = tempdir::TempDir::new("mmap").unwrap();
+        let tempdir = tempfile::tempdir().unwrap();
         let path = tempdir.path().join("mmap");
 
         let file = OpenOptions::new()
@@ -822,7 +822,7 @@ mod test {
 
     #[test]
     fn map_copy() {
-        let tempdir = tempdir::TempDir::new("mmap").unwrap();
+        let tempdir = tempfile::tempdir().unwrap();
         let path = tempdir.path().join("mmap");
 
         let mut file = OpenOptions::new()
@@ -858,7 +858,7 @@ mod test {
 
     #[test]
     fn map_offset() {
-        let tempdir = tempdir::TempDir::new("mmap").unwrap();
+        let tempdir = tempfile::tempdir().unwrap();
         let path = tempdir.path().join("mmap");
 
         let file = OpenOptions::new()
@@ -939,7 +939,7 @@ mod test {
     #[test]
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     fn jit_x86_file() {
-        let tempdir = tempdir::TempDir::new("mmap").unwrap();
+        let tempdir = tempfile::tempdir().unwrap();
         let mut options = OpenOptions::new();
         #[cfg(windows)]
         options.access_mode(GENERIC_ALL);
@@ -957,7 +957,7 @@ mod test {
 
     #[test]
     fn mprotect_file() {
-        let tempdir = tempdir::TempDir::new("mmap").unwrap();
+        let tempdir = tempfile::tempdir().unwrap();
         let path = tempdir.path().join("mmap");
 
         let mut options = OpenOptions::new();
@@ -1003,7 +1003,7 @@ mod test {
 
     #[test]
     fn mprotect_copy() {
-        let tempdir = tempdir::TempDir::new("mmap").unwrap();
+        let tempdir = tempfile::tempdir().unwrap();
         let path = tempdir.path().join("mmap");
 
         let mut options = OpenOptions::new();
